@@ -11,5 +11,8 @@
                   base64url
                  ]},
   {modules, []},
+  {maintainers, ["Bas Wegh"]},
+  {licenses, ["Apache 2.0"]},
+  {links, [{"GitHub","https://github.com/indigo-dc/erljwt"}]},
   {env, []}
  ]}.
