@@ -15,4 +15,3 @@ cover/
 *.coverdata
 test/ct.cover.spec
 *.beam
-rebar.lock
