@@ -1,0 +1,15 @@
+{application, erljwt,
+ [
+  {description, "a simple jwt decoding/encoding library"},
+  {vsn, "semver"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  crypto,
+                  jsx,
+                  base64url
+                 ]},
+  {modules, []},
+  {env, []}
+ ]}.
