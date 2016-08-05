@@ -10,7 +10,6 @@ clean:
 
 eunit:
 	$(REBAR) eunit
-	cp _build/test/cover/eunit.coverdata .
 
 ct:
 	$(REBAR) ct
