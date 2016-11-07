@@ -1,13 +1,13 @@
 {application, erljwt,
  [
   {description, "a simple jwt decoding/encoding library"},
-  {vsn, "0.2.0"},
+  {vsn, "0.2.1"},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib,
                   crypto,
-                  jsx,
+                  jsone,
                   base64url
                  ]},
   {modules, []},
