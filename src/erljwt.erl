@@ -14,9 +14,9 @@
 -export([parse_jwt/3]).
 -export([jwt/3, jwt/4]).
 
-jsx_decode_safe(Bin) ->
-    R = try jsx:decode(Bin, [{labels, attempt_atom}])
-        of List0 -> List0
+jsone_decode_safe(Bin) ->
+    R = try jsone:decode(Bin, [{keys, attempt_atom}, {object_format, proplist}])
+        of Map0 -> Map0
         catch Err -> Err
         end,
     case R of
@@ -101,7 +101,7 @@ split_jwt_token(Token) ->
 
 decode_jwt([Header, ClaimSet, Signature]) ->
     [HeaderMap, ClaimSetMap] =
-    Decoded = [jsx_decode_safe(base64url:decode(X)) || X <- [Header, ClaimSet]],
+    Decoded = [jsone_decode_safe(base64url:decode(X)) || X <- [Header, ClaimSet]],
     case lists:any(fun(E) -> E =:= invalid end, Decoded) of
         true  -> invalid;
         false -> #{
@@ -117,8 +117,8 @@ jwt(Alg, ClaimSetMap, ExpirationSeconds, Key) ->
     jwt(Alg, ClaimSetExpMap, Key).
 
 jwt(Alg, ClaimSetMap, Key) ->
-    ClaimSet = base64url:encode(jsx:encode(ClaimSetMap)),
-    Header = base64url:encode(jsx:encode(jwt_header(Alg))),
+    ClaimSet = base64url:encode(jsone:encode(ClaimSetMap)),
+    Header = base64url:encode(jsone:encode(jwt_header(Alg))),
     Payload = <<Header/binary, ".", ClaimSet/binary>>,
     jwt_return_signed(Alg, Payload, Key).
 
