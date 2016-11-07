@@ -1,7 +1,7 @@
 {application, erljwt,
  [
   {description, "a simple jwt decoding/encoding library"},
-  {vsn, "0.1.0"},
+  {vsn, "0.2.0"},
   {registered, []},
   {applications, [
                   kernel,
