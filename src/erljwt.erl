@@ -154,7 +154,9 @@ jwt_check_signature(EncSignature, <<"RS256">>, Payload, PublicKey)
     Signature = base64url:decode(EncSignature),
     crypto:verify(rsa, sha256, Payload, Signature, PublicKey);
 jwt_check_signature(Signature, <<"HS256">>, Payload, SharedKey) ->
-    Signature =:= jwt_sign(hs256, Payload, SharedKey).
+    Signature =:= jwt_sign(hs256, Payload, SharedKey);
+jwt_check_signature(Signature, <<"none">>, _Payload, _Key) ->
+    Signature =:= <<"">>.
 
 jwt_sign(rs256, Payload, Key) when is_list(Key)->
     base64url:encode(crypto:sign(rsa, sha256, Payload, Key));
@@ -162,6 +164,8 @@ jwt_sign(rs256, Payload, #'RSAPrivateKey'{} = Key) ->
     base64url:encode(public_key:sign(Payload, sha256, Key));
 jwt_sign(hs256, Payload, Key) ->
     base64url:encode(crypto:hmac(sha256, Key, Payload));
+jwt_sign(none, _Payload, _Key) ->
+    <<"">>;
 jwt_sign(_, _, _) ->
     alg_not_supported.
 
@@ -169,6 +173,8 @@ jwt_header(rs256) ->
     #{ alg => <<"RS256">>, typ => <<"JWT">>};
 jwt_header(hs256) ->
     #{ alg => <<"HS256">>, typ => <<"JWT">>};
+jwt_header(none) ->
+    #{ alg => <<"none">>, typ => <<"JWT">>};
 jwt_header(_) ->
     #{ typ => <<"JWT">>}.
 
