@@ -153,10 +153,13 @@ jwt_check_signature(EncSignature, <<"RS256">>, Payload, PublicKey)
   when is_list(PublicKey) ->
     Signature = base64url:decode(EncSignature),
     crypto:verify(rsa, sha256, Payload, Signature, PublicKey);
-jwt_check_signature(Signature, <<"HS256">>, Payload, SharedKey) ->
+jwt_check_signature(Signature, <<"HS256">>, Payload, SharedKey)
+  when is_list(SharedKey); is_binary(SharedKey)->
     Signature =:= jwt_sign(hs256, Payload, SharedKey);
 jwt_check_signature(Signature, <<"none">>, _Payload, _Key) ->
-    Signature =:= <<"">>.
+    Signature =:= <<"">>;
+jwt_check_signature(_Signature, _Algo, _Payload, _Key) ->
+    false.
 
 jwt_sign(rs256, Payload, Key) when is_list(Key)->
     base64url:encode(crypto:sign(rsa, sha256, Payload, Key));
