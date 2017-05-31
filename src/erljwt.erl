@@ -57,7 +57,6 @@ validate_signature(Algorithm, KeyId, #{signature := Signature,
                                        payload := Payload}, KeyList)
   when is_binary(Algorithm) ->
     Key = get_needed_key(Algorithm, KeyId, KeyList),
-    io:format("found key ~p in ~p~n", [Key, KeyList]),
     jwt_check_signature(Signature, Algorithm, Payload, Key);
 validate_signature(_, _, _, _) ->
     false.
@@ -88,7 +87,6 @@ jwt_check_signature(EncSignature, <<"RS256">>, Payload,
     Decode = fun(Base64) ->
                      binary:decode_unsigned(safe_base64_decode(Base64))
              end,
-    io:format("checking signature: n: ~p, e: ~p~n", [Decode(N), Decode(E)]),
     crypto:verify(rsa, sha256, Payload, Signature, [Decode(E), Decode(N)]);
 jwt_check_signature(Signature, <<"HS256">>, Payload, SharedKey)
   when is_list(SharedKey); is_binary(SharedKey)->
@@ -134,7 +132,6 @@ split_jwt_token(Token) ->
     binary:split(Token, [<<".">>], [global]).
 
 decode_jwt([Header, ClaimSet, Signature]) ->
-    io:format("decoding jwt~n"),
     HeaderMap = base64_to_map(Header),
     ClaimSetMap = base64_to_map(ClaimSet),
     Payload = <<Header/binary, ".", ClaimSet/binary>>,
