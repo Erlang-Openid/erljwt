@@ -1,21 +1,26 @@
 Erlang JWT Library
 =
+erljwt is a easy to use json web token [JWT] parsing and minting library.
+JWT is a simple authorization token [RFC7519](https://www.rfc-editor.org/rfc/rfc7519.txt) based on JSON.
 
-JWT is a simple authorization token [format](http://self-issued.info/docs/draft-ietf-oauth-json-web-token.html) based on JSON. 
-The library is based on work by Kato.im and was enhanced with tests, stylechecking and the RS256 algorithm. It now uses maps and the jsx library for JSON parsing/checking.
+erljwt uses the jsone library for json parsing.
 
-This library is used by the OpenId Connect client library oidcc.
+supported algorithm
+ - none
+ - RS256
+ - HS256
 
 ## Smoke test example
 
 Compilation
 ```shell
    make
-   make eunit 
+   make eunit
 ```
 
 In Erlang shell:
 
+```
     %% Create JWT token
     application:start(crypto).
     Key = <<"53F61451CAD6231FDCF6859C6D5B88C1EBD5DC38B9F7EBD990FADD4EB8EB9063">>.
@@ -24,17 +29,21 @@ In Erlang shell:
         {user_name, <<"Bob">>}
     ]}.
     ExpirationSeconds = 86400,
-    Token = erljwt:jwt(hs256, Claims, ExpirationSeconds, Key).
+    Token = erljwt:create(hs256, Claims, ExpirationSeconds, Key).
 
     %% Parse JWT token
-    erljwt:parse_jwt(Token, Key).
+    erljwt:parse(Token, Key).
+```
 
+You should get back the original claims ,plus expiration claim and the header and signature:
 
-You should get back the original claims Jterm, plus expiration claim:
-
-    {[
-        {<<"exp">>,1392607527},
-        {<<"user_id">>,<<"bob123">>},
-        {<<"user_name">>,<<"Bob">>}
-    ]}
-
+```
+    #{ claims =>
+        #{<<"exp">> => 1392607527,
+          <<"user_id">> => <<"bob123">>,
+          <<"user_name">> => <<"Bob">>
+         },
+       header => #{...},
+       signature => <<"lnmmaen....">>
+    }
+```
