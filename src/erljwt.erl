@@ -45,7 +45,7 @@ jwt_to_map(Jwt) ->
 
 validate_jwt(#{ header := Header, claims := Claims} = Jwt, KeyList) ->
     Algorithm = maps:get(alg, Header, undefined),
-    KeyId = maps:get(alg, Header, undefined),
+    KeyId = maps:get(kid, Header, undefined),
     ValidSignature = validate_signature(Algorithm, KeyId, Jwt, KeyList),
     ExpiresAt  = maps:get(exp, Claims, undefined),
     StillValid = still_valid(ExpiresAt),
@@ -79,7 +79,7 @@ get_needed_key(<<"HS256">>, _KeyId, _) ->
 get_needed_key(<<"RS256">>, KeyId, KeyList) ->
     filter_rsa_key(KeyId, KeyList, []);
 get_needed_key(_, _, _) ->
-    unkonwn_algorithm.
+    unknown_algorithm.
 
 jwt_check_signature(EncSignature, <<"RS256">>, Payload,
                     #{kty := <<"RSA">>, n := N, e:= E}) ->
