@@ -99,11 +99,11 @@ jwt_check_signature(_Signature, _Algo, _Payload, _Key) ->
     invalid.
 
 filter_rsa_key(_, [], []) ->
-    not_found;
+    no_key_found;
 filter_rsa_key(_, [], [Key]) ->
     Key;
 filter_rsa_key(_, [], _) ->
-    too_many;
+    too_many_keys;
 filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, kid:= KeyId } = Key | _], _) ->
     Key;
 filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, kid := _Other} | Tail], List ) ->
