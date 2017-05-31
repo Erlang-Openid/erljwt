@@ -1,168 +1,189 @@
 %%
 %% JWT Library for Erlang.
-%% Started by Peter Hizalev at Kato (http://kato.im)
-%% Changed/Enhanced by Bas Wegh at KIT (http://kit.edu)
+%% by Bas Wegh at KIT (http://kit.edu)
 %%
 
 -module(erljwt).
 
 -include_lib("public_key/include/public_key.hrl").
 
--export([pre_parse_jwt/1]).
--export([get_jwt_header/1]).
--export([parse_jwt/2]).
--export([parse_jwt/3]).
--export([jwt/3, jwt/4]).
+-export([parse/2]).
+-export([create/3, create/4]).
 
-jsone_decode_safe(Bin) ->
-    R = try jsone:decode(Bin, [{keys, attempt_atom}, {object_format, proplist}])
-        of Map0 -> Map0
-        catch Err -> Err
-        end,
-    case R of
-        {error, _} ->
-            invalid;
-        List when is_list(List) ->
-            %% force absence of duplicate keys
-            %% http://self-issued.info/docs/draft-ietf-oauth-json-web-token.html
-            Keys = [K || {K, _} <- List],
-            case length(lists:usort(Keys)) =:= length(Keys) of
-                true ->
-                    maps:from_list(List);
-                false ->
-                    invalid
-            end;
-        _ ->
-            invalid
-    end.
+parse(Jwt, KeyList) when is_list(KeyList) ->
+    validate_jwt(jwt_to_map(Jwt), KeyList);
+parse(Jwt, #{keys := KeyList}) ->
+    parse(Jwt, KeyList);
+parse(Jwt, Key) ->
+    parse(Jwt, [to_jwk(Key)]).
 
-pre_parse_jwt(Token) ->
-    case decode_jwt(split_jwt_token(Token)) of
-        #{} = JwtMap ->
-            JwtMap;
-        invalid ->
-            invalid
-    end.
-
-get_jwt_header(Token) ->
-    case decode_jwt(split_jwt_token(Token)) of
-        #{header := HeaderMap } ->
-            HeaderMap;
-        invalid ->
-            invalid
-    end.
-
-parse_jwt(Token, Key) ->
-    parse_jwt(Token, Key, undefined).
-
-parse_jwt(Token, Key, FallbackType) ->
-    SplitToken = split_jwt_token(Token),
-    case decode_jwt(SplitToken) of
-        #{header := HeaderMap,
-          claims := ClaimSetMap,
-          signature := Signature} ->
-            [Header, ClaimSet | _] = SplitToken,
-            Type = case maps:get(typ, HeaderMap, undefined) of
-                       undefined -> FallbackType;
-                       T -> T
-                   end,
-            Alg  = maps:get(alg, HeaderMap, undefined),
-            SignatureOk = parse_jwt_check_sig(Type, Alg, Header,
-                                              ClaimSet, Signature, Key),
-            Expired = parse_jwt_has_expired(ClaimSetMap),
-            case {SignatureOk, Expired} of
-                {true, false} -> ClaimSetMap;
-                {false, _} -> invalid;
-                {true, true} -> expired
-            end;
-        invalid -> invalid
-    end.
-
-parse_jwt_has_expired(ClaimSetMap) ->
-    Expiry  = maps:get(exp, ClaimSetMap, none),
-    case Expiry of
-        none ->
-            false;
-        _ ->
-            case (Expiry - epoch()) of
-                DeltaSecs when DeltaSecs > 0 ->
-                    false;
-                _ ->
-                    true
-            end
-    end.
-
-parse_jwt_check_sig(<<"JWT">>, Alg, Header, ClaimSet, Signature, Key) ->
-    Payload = <<Header/binary, ".", ClaimSet/binary>>,
-    jwt_check_signature(Signature, Alg, Payload, Key).
-
-split_jwt_token(Token) ->
-    binary:split(Token, [<<".">>], [global]).
-
-decode_jwt([Header, ClaimSet, Signature]) ->
-    [HeaderMap, ClaimSetMap] =
-    Decoded = [jsone_decode_safe(base64url:decode(X)) || X <- [Header, ClaimSet]],
-    case lists:any(fun(E) -> E =:= invalid end, Decoded) of
-        true  -> invalid;
-        false -> #{
-          header => HeaderMap,
-          claims => ClaimSetMap,
-          signature => Signature}
-    end;
-decode_jwt(_) ->
-    invalid.
-
-jwt(Alg, ClaimSetMap, ExpirationSeconds, Key) ->
-    ClaimSetExpMap = jwt_add_exp(ClaimSetMap, ExpirationSeconds),
-    jwt(Alg, ClaimSetExpMap, Key).
-
-jwt(Alg, ClaimSetMap, Key) ->
+create(Alg, ClaimSetMap, Key) when is_map(ClaimSetMap) ->
     ClaimSet = base64url:encode(jsone:encode(ClaimSetMap)),
     Header = base64url:encode(jsone:encode(jwt_header(Alg))),
     Payload = <<Header/binary, ".", ClaimSet/binary>>,
-    jwt_return_signed(Alg, Payload, Key).
+    return_signed_jwt(Alg, Payload, Key).
 
-jwt_return_signed(Alg, Payload, Key) ->
-    case jwt_sign(Alg, Payload, Key) of
-        alg_not_supported ->
-            alg_not_supported;
-        Signature ->
-            <<Payload/binary, ".", Signature/binary>>
-    end.
+create(Alg, ClaimSetMap, ExpirationSeconds, Key) when is_map(ClaimSetMap) ->
+    ClaimSetExpMap = jwt_add_exp(ClaimSetMap, ExpirationSeconds),
+    create(Alg, ClaimSetExpMap, Key).
 
 
-jwt_add_exp(ClaimSetMap, ExpirationSeconds) ->
-    Expiration = case ExpirationSeconds of
-                     {hourly, ExpirationSeconds0} ->
-                         Ts = epoch(),
-                         (Ts - (Ts rem 3600)) + ExpirationSeconds0;
-                     {daily, ExpirationSeconds0} ->
-                         Ts = epoch(),
-                         (Ts - (Ts rem (24*3600))) + ExpirationSeconds0;
-                     _ ->
-                         epoch() + ExpirationSeconds
-                 end,
-    maps:put(exp, Expiration, ClaimSetMap).
+%% ========================================================================
+%%                       INTERNAL
+%% ========================================================================
+
+to_jwk(#'RSAPublicKey'{ modulus = N, publicExponent = E}) ->
+    Encode = fun(Int) ->
+                     base64url:encode(binary:encode_unsigned(Int))
+             end,
+    #{kty => <<"RSA">>, e => Encode(E), n => Encode(N) };
+to_jwk(Key) ->
+    Key.
+
+jwt_to_map(Jwt) ->
+    decode_jwt(split_jwt_token(Jwt)).
+
+validate_jwt(#{ header := Header, claims := Claims} = Jwt, KeyList) ->
+    Algorithm = maps:get(alg, Header, undefined),
+    KeyId = maps:get(alg, Header, undefined),
+    ValidSignature = validate_signature(Algorithm, KeyId, Jwt, KeyList),
+    ExpiresAt  = maps:get(exp, Claims, undefined),
+    StillValid = still_valid(ExpiresAt),
+    return_validation_result(ValidSignature, StillValid, Jwt);
+validate_jwt(_, _) ->
+    invalid.
+
+validate_signature(Algorithm, KeyId, #{signature := Signature,
+                                       payload := Payload}, KeyList)
+  when is_binary(Algorithm) ->
+    Key = get_needed_key(Algorithm, KeyId, KeyList),
+    io:format("found key ~p in ~p~n", [Key, KeyList]),
+    jwt_check_signature(Signature, Algorithm, Payload, Key);
+validate_signature(_, _, _, _) ->
+    false.
+
+return_validation_result(true, true, Jwt) ->
+    maps:with([header, claims, signature], Jwt);
+return_validation_result(true, false, _) ->
+    expired;
+return_validation_result(Error, _, _) ->
+    Error.
 
 
-jwt_check_signature(EncSignature, <<"RS256">>, Payload, #'RSAPublicKey'{} =
-                    PublicKey) ->
-    Signature = base64url:decode(EncSignature),
-    public_key:verify(Payload, sha256, Signature, PublicKey);
-jwt_check_signature(EncSignature, <<"RS256">>, Payload, PublicKey)
-  when is_list(PublicKey) ->
-    Signature = base64url:decode(EncSignature),
-    crypto:verify(rsa, sha256, Payload, Signature, PublicKey);
+
+get_needed_key(<<"none">>, _, _) ->
+    <<>>;
+get_needed_key(<<"HS256">>, _KeyId, [ Key ]) ->
+    Key;
+get_needed_key(<<"HS256">>, _KeyId, _) ->
+    too_many_keys;
+get_needed_key(<<"RS256">>, KeyId, KeyList) ->
+    filter_rsa_key(KeyId, KeyList, []);
+get_needed_key(_, _, _) ->
+    unkonwn_algorithm.
+
+jwt_check_signature(EncSignature, <<"RS256">>, Payload,
+                    #{kty := <<"RSA">>, n := N, e:= E}) ->
+    Signature = safe_base64_decode(EncSignature),
+    Decode = fun(Base64) ->
+                     binary:decode_unsigned(safe_base64_decode(Base64))
+             end,
+    io:format("checking signature: n: ~p, e: ~p~n", [Decode(N), Decode(E)]),
+    crypto:verify(rsa, sha256, Payload, Signature, [Decode(E), Decode(N)]);
 jwt_check_signature(Signature, <<"HS256">>, Payload, SharedKey)
   when is_list(SharedKey); is_binary(SharedKey)->
     Signature =:= jwt_sign(hs256, Payload, SharedKey);
 jwt_check_signature(Signature, <<"none">>, _Payload, _Key) ->
     Signature =:= <<"">>;
+jwt_check_signature(_Signature, _Algo, _Payload, Error) when is_atom(Error) ->
+    Error;
 jwt_check_signature(_Signature, _Algo, _Payload, _Key) ->
+    invalid.
+
+filter_rsa_key(_, [], []) ->
+    not_found;
+filter_rsa_key(_, [], [Key]) ->
+    Key;
+filter_rsa_key(_, [], _) ->
+    too_many;
+filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, kid:= KeyId } = Key | _], _) ->
+    Key;
+filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, kid := _Other} | Tail], List ) ->
+    filter_rsa_key(KeyId, Tail, List);
+filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, use:=<<"sig">>} = Key | Tail],
+               List ) ->
+    filter_rsa_key(KeyId, Tail, [ Key | List ] );
+filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, use:= _} | Tail], List ) ->
+    filter_rsa_key(KeyId, Tail, List);
+filter_rsa_key(KeyId, [ #{kty := <<"RSA">>} = Key | Tail], List ) ->
+    filter_rsa_key(KeyId, Tail, [ Key | List ] );
+filter_rsa_key(KeyId, [ _ | Tail ], List) ->
+    filter_rsa_key(KeyId, Tail, List).
+
+
+still_valid(undefined) ->
+    true;
+still_valid(ExpiresAt) when is_number(ExpiresAt) ->
+    SecondsLeft = ExpiresAt - epoch(),
+    SecondsLeft > 0;
+still_valid(_) ->
     false.
 
-jwt_sign(rs256, Payload, Key) when is_list(Key)->
-    base64url:encode(crypto:sign(rsa, sha256, Payload, Key));
+
+split_jwt_token(Token) ->
+    binary:split(Token, [<<".">>], [global]).
+
+decode_jwt([Header, ClaimSet, Signature]) ->
+    io:format("decoding jwt~n"),
+    HeaderMap = base64_to_map(Header),
+    ClaimSetMap = base64_to_map(ClaimSet),
+    Payload = <<Header/binary, ".", ClaimSet/binary>>,
+    create_jwt_map(HeaderMap, ClaimSetMap, Signature, Payload);
+decode_jwt(_) ->
+    invalid.
+
+create_jwt_map(HeaderMap, ClaimSetMap, Signature, Payload)
+  when is_map(HeaderMap), is_map(ClaimSetMap), is_binary(Payload) ->
+    #{
+       header => HeaderMap,
+       claims => ClaimSetMap,
+       signature => Signature,
+       payload => Payload
+     };
+create_jwt_map(_, _, _, _) ->
+    invalid.
+
+
+base64_to_map(Base64) ->
+    Bin = safe_base64_decode(Base64),
+    handle_json_result(safe_jsone_decode(Bin)).
+
+handle_json_result(PropList) when is_list(PropList) ->
+    %% force absence of duplicate keys
+    Keys = [K || {K, _} <- PropList],
+    SameLength = (length(lists:usort(Keys)) =:= length(Keys)),
+    return_decoded_jwt_or_error(SameLength, PropList);
+handle_json_result(_) ->
+    invalid.
+
+return_decoded_jwt_or_error(true, PropList) ->
+    maps:from_list(PropList);
+return_decoded_jwt_or_error(_, _) ->
+    invalid.
+
+
+jwt_add_exp(ClaimSetMap, ExpirationSeconds) ->
+    Expiration = epoch() + ExpirationSeconds,
+    maps:put(exp, Expiration, ClaimSetMap).
+
+return_signed_jwt(Alg, Payload, Key) ->
+    handle_signature(jwt_sign(Alg, Payload, Key), Payload).
+
+handle_signature(Signature, Payload) when is_binary(Signature) ->
+    <<Payload/binary, ".", Signature/binary>>;
+handle_signature(Error, _) when is_atom(Error) ->
+    Error.
+
 jwt_sign(rs256, Payload, #'RSAPrivateKey'{} = Key) ->
     base64url:encode(public_key:sign(Payload, sha256, Key));
 jwt_sign(hs256, Payload, Key) ->
@@ -184,3 +205,26 @@ jwt_header(_) ->
 epoch() ->
     UniversalNow = calendar:now_to_universal_time(os:timestamp()),
     calendar:datetime_to_gregorian_seconds(UniversalNow) - 719528 * 24 * 3600.
+
+safe_base64_decode(Base64) ->
+    Fun = fun() ->
+                  base64url:decode(Base64)
+          end,
+    result_or_invalid(Fun).
+
+
+safe_jsone_decode(Bin) ->
+    Fun = fun() ->
+                  jsone:decode(Bin, [{keys, attempt_atom},
+                                     {object_format, proplist}])
+          end,
+    result_or_invalid(Fun).
+
+result_or_invalid(Fun) ->
+    try
+        Fun()
+    of
+        Result -> Result
+    catch _:_ ->
+            invalid
+    end.
