@@ -1,7 +1,7 @@
 -module(erljwt_test).
 -include_lib("eunit/include/eunit.hrl").
 
--define(RSA_PUBLIC_KEY,[65537, 26764034142824704671470727133910664843434961952272064166426226039805773031712563508339384620585192869091085197093344386232207542619708787421377966896296841271368128705832667137731759368836398793992412062213039259549646668413294499661784015754202306959856976300366659103241590400757099670805804654764282426982148086034348017908262389651476327142185608358813461989019448157613779262598416478574844583047253739496922447827706849259886451307152776609476861777213322863455948194927465841543344937499194416674011076061250124513400818349182398008202094247204740240584520318269147256825860139612842332966614539793342302993867]).
+-define(RSA_PUBLIC_KEY,{'RSAPublicKey', 26764034142824704671470727133910664843434961952272064166426226039805773031712563508339384620585192869091085197093344386232207542619708787421377966896296841271368128705832667137731759368836398793992412062213039259549646668413294499661784015754202306959856976300366659103241590400757099670805804654764282426982148086034348017908262389651476327142185608358813461989019448157613779262598416478574844583047253739496922447827706849259886451307152776609476861777213322863455948194927465841543344937499194416674011076061250124513400818349182398008202094247204740240584520318269147256825860139612842332966614539793342302993867, 65537}).
 
 -define(RSA_PRIVATE_KEY,{'RSAPrivateKey','two-prime',
                      26764034142824704671470727133910664843434961952272064166426226039805773031712563508339384620585192869091085197093344386232207542619708787421377966896296841271368128705832667137731759368836398793992412062213039259549646668413294499661784015754202306959856976300366659103241590400757099670805804654764282426982148086034348017908262389651476327142185608358813461989019448157613779262598416478574844583047253739496922447827706849259886451307152776609476861777213322863455948194927465841543344937499194416674011076061250124513400818349182398008202094247204740240584520318269147256825860139612842332966614539793342302993867,
@@ -17,21 +17,36 @@
 rs256_verification_test() ->
     IdToken =
     <<"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE0NjA2MzE4MjEsImlzcyI6Imh0dHBzOi8vcHJvdG9uLnNjYy5raXQuZWR1Iiwic3ViIjoiam9lIiwiYXVkIjoiMTIzIiwiaWF0IjoxNDYwNjMxNTIxLCJhdXRoX3RpbWUiOjE0NjA2MzE1MjF9.nUKMCw_ppksTD49qWR7hs_FTNnVu2qaohnh67jANI9Cje7gaFi2puIsXbC_i0HoFnppR5mA_3B20f7X8O3UF3ZrgYyfjjAq5U3HeZ-Tx6xEd2EcJ-gfpVnoAJPa46Lx77NmApUyTAazXj8kjzgkh58_QDxujG13g55ckRG9qJfK3bX_h0ec07ARJWQSg_Zh8Q3lFB_iIbSDXOYegSAHhIpTxmuTA-qmPn3ySGIRirQt_-niek0-wyy5PAsxSU9lc42QIG7qdMLhvXsq5j52kPO9DA3vJNpGTloJ8H1AoE-ES8HpXH3RhRMe3cdiVyK2vTsPbRc0-GxkRZMKaocyOPQ">>,
-
-
-    ExpPreParse = #{claims => #{exp => 1460631821,
-                                iss => <<"https://proton.scc.kit.edu">>,
-                                sub => <<"joe">>,
-                                <<"aud">> => <<"123">>,
-                                <<"auth_time">> => 1460631521,
-                                <<"iat">> => 1460631521},
-                    header => #{alg => <<"RS256">>,typ => <<"JWT">>}, signature => <<"nUKMCw_ppksTD49qWR7hs_FTNnVu2qaohnh67jANI9Cje7gaFi2puIsXbC_i0HoFnppR5mA_3B20f7X8O3UF3ZrgYyfjjAq5U3HeZ-Tx6xEd2EcJ-gfpVnoAJPa46Lx77NmApUyTAazXj8kjzgkh58_QDxujG13g55ckRG9qJfK3bX_h0ec07ARJWQSg_Zh8Q3lFB_iIbSDXOYegSAHhIpTxmuTA-qmPn3ySGIRirQt_-niek0-wyy5PAsxSU9lc42QIG7qdMLhvXsq5j52kPO9DA3vJNpGTloJ8H1AoE-ES8HpXH3RhRMe3cdiVyK2vTsPbRc0-GxkRZMKaocyOPQ">> },
-    Header = maps:get(header, ExpPreParse),
-    ExpPreParse = erljwt:pre_parse_jwt(IdToken),
-    Header = erljwt:get_jwt_header(IdToken),
-    expired = erljwt:parse_jwt(IdToken,?RSA_PUBLIC_KEY),
+    expired = erljwt:parse(IdToken,?RSA_PUBLIC_KEY),
     ok.
 
+
+none_roundtrip_test() ->
+    Claims = #{exp => 1460632831, iss => <<"me">>,
+               sub => <<"789049">>,
+               <<"aud">> => <<"someone">>,
+               <<"azp">> => <<"thesameone">>,
+               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
+
+    JWT = erljwt:create(none, Claims, 10, undefined),
+    #{claims := ClaimsWithExp} = erljwt:parse(JWT,undefined),
+    true = is_map(ClaimsWithExp),
+    ClaimsWithExp = maps:put(exp,maps:get(exp,ClaimsWithExp),Claims),
+    ok.
+
+hs256_roundtrip_test() ->
+    Claims = #{exp => 1460632831, iss => <<"me">>,
+               sub => <<"789049">>,
+               <<"aud">> => <<"someone">>,
+               <<"azp">> => <<"thesameone">>,
+               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
+    Key = <<"my secret key">>,
+
+    JWT = erljwt:create(hs256,Claims, 10, Key),
+    #{claims := ClaimsWithExp} = erljwt:parse(JWT,Key),
+    true = is_map(ClaimsWithExp),
+    ClaimsWithExp = maps:put(exp,maps:get(exp,ClaimsWithExp),Claims),
+    ok.
 
 rsa256_roundtrip_test() ->
     Claims = #{exp => 1460632831,
@@ -41,39 +56,12 @@ rsa256_roundtrip_test() ->
                <<"azp">> => <<"thesameone">>,
                <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
 
-    JWT = erljwt:jwt(rs256,Claims, 10, ?RSA_PRIVATE_KEY),
-    ClaimsWithExp = erljwt:parse_jwt(JWT,?RSA_PUBLIC_KEY),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    #{claims := ClaimsWithExp} = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
     true = is_map(ClaimsWithExp),
-    ClaimsWithExp = maps:put(exp,maps:get(exp,ClaimsWithExp),Claims),
+    ClaimsWithExp = maps:put(exp, maps:get(exp,ClaimsWithExp), Claims),
     ok.
 
-
-hs256_test() ->
-    Claims = #{exp => 1460632831, iss => <<"me">>,
-               sub => <<"789049">>,
-               <<"aud">> => <<"someone">>,
-               <<"azp">> => <<"thesameone">>,
-               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
-    Key = <<"my secret key">>,
-
-    JWT = erljwt:jwt(hs256,Claims, 10, Key),
-    ClaimsWithExp = erljwt:parse_jwt(JWT,Key),
-    true = is_map(ClaimsWithExp),
-    ClaimsWithExp = maps:put(exp,maps:get(exp,ClaimsWithExp),Claims),
-    ok.
-
-none_alg_test() ->
-    Claims = #{exp => 1460632831, iss => <<"me">>,
-               sub => <<"789049">>,
-               <<"aud">> => <<"someone">>,
-               <<"azp">> => <<"thesameone">>,
-               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
-
-    JWT = erljwt:jwt(none, Claims, 10, undefined),
-    ClaimsWithExp = erljwt:parse_jwt(JWT,undefined),
-    true = is_map(ClaimsWithExp),
-    ClaimsWithExp = maps:put(exp,maps:get(exp,ClaimsWithExp),Claims),
-    ok.
 
 unsupported_alg_test() ->
     Claims = #{exp => 1460632831, iss => <<"me">>,
@@ -83,5 +71,5 @@ unsupported_alg_test() ->
                <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
     Key = <<"my secret key">>,
 
-    alg_not_supported = erljwt:jwt(xy21,Claims, 10, Key),
+    alg_not_supported = erljwt:create(xy21,Claims, 10, Key),
     ok.

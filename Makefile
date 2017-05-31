@@ -1,7 +1,7 @@
 REBAR = $(shell pwd)/rebar3
 APP=oidcc
 
-.PHONY: all ct test clean elvis compile 
+.PHONY: all ct test clean elvis compile
 
 all: compile
 
@@ -9,7 +9,8 @@ clean:
 	$(REBAR) clean
 
 eunit:
-	$(REBAR) eunit
+	$(REBAR) cover -r
+	$(REBAR) do eunit, cover -v
 
 ct:
 	$(REBAR) ct
@@ -19,4 +20,3 @@ elvis:
 
 compile:
 	$(REBAR) compile
-
