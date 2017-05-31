@@ -8,6 +8,7 @@
 -include_lib("public_key/include/public_key.hrl").
 
 -export([parse/2]).
+-export([to_map/1]).
 -export([create/3, create/4]).
 
 parse(Jwt, KeyList) when is_list(KeyList) ->
@@ -16,6 +17,9 @@ parse(Jwt, #{keys := KeyList}) ->
     parse(Jwt, KeyList);
 parse(Jwt, Key) ->
     parse(Jwt, [to_jwk(Key)]).
+
+to_map(Jwt) ->
+    maps:with([header, claims, signature], jwt_to_map(Jwt)).
 
 create(Alg, ClaimSetMap, Key) when is_map(ClaimSetMap) ->
     ClaimSet = base64url:encode(jsone:encode(ClaimSetMap)),
