@@ -22,54 +22,112 @@ rs256_verification_test() ->
 
 
 none_roundtrip_test() ->
-    Claims = #{exp => 1460632831, iss => <<"me">>,
-               sub => <<"789049">>,
-               <<"aud">> => <<"someone">>,
-               <<"azp">> => <<"thesameone">>,
-               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
-
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
     JWT = erljwt:create(none, Claims, 10, undefined),
-    #{claims := ClaimsWithExp} = erljwt:parse(JWT,undefined),
-    true = is_map(ClaimsWithExp),
-    ClaimsWithExp = maps:put(exp,maps:get(exp,ClaimsWithExp),Claims),
-    ok.
+    Result = erljwt:parse(JWT,undefined),
+    true = valid_claims(Claims, Result).
 
 hs256_roundtrip_test() ->
-    Claims = #{exp => 1460632831, iss => <<"me">>,
-               sub => <<"789049">>,
-               <<"aud">> => <<"someone">>,
-               <<"azp">> => <<"thesameone">>,
-               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
     Key = <<"my secret key">>,
-
     JWT = erljwt:create(hs256,Claims, 10, Key),
-    #{claims := ClaimsWithExp} = erljwt:parse(JWT,Key),
-    true = is_map(ClaimsWithExp),
-    ClaimsWithExp = maps:put(exp,maps:get(exp,ClaimsWithExp),Claims),
-    ok.
+    Result = erljwt:parse(JWT,Key),
+    true = valid_claims(Claims, Result).
 
 rsa256_roundtrip_test() ->
-    Claims = #{exp => 1460632831,
-               iss => <<"me">>,
-               sub => <<"789049">>,
-               <<"aud">> => <<"someone">>,
-               <<"azp">> => <<"thesameone">>,
-               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
-
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
-    #{claims := ClaimsWithExp} = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
-    true = is_map(ClaimsWithExp),
-    ClaimsWithExp = maps:put(exp, maps:get(exp,ClaimsWithExp), Claims),
-    ok.
+    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    true = valid_claims(Claims, Result).
 
 
 unsupported_alg_test() ->
-    Claims = #{exp => 1460632831, iss => <<"me">>,
-               sub => <<"789049">>,
-               <<"aud">> => <<"someone">>,
-               <<"azp">> => <<"thesameone">>,
-               <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>},
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
     Key = <<"my secret key">>,
-
     alg_not_supported = erljwt:create(xy21,Claims, 10, Key),
+    application:unset_env(erljwt, add_iat).
+
+to_map_test() ->
+    Claims = claims(),
+    JWT = erljwt:create(none, Claims, 10, undefined),
+    Result = erljwt:to_map(JWT),
+    Result = erljwt:parse(JWT,undefined),
+    true = valid_claims(Claims, Result).
+
+exp_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Claims = claims(),
+    JWT = erljwt:create(rs256, Claims, ?RSA_PRIVATE_KEY),
+    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    true = valid_claims(Claims, Result).
+
+exp_fail_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Now = erlang:system_time(seconds),
+    Claims = maps:merge(#{exp=> (Now -1)}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_PRIVATE_KEY),
+    expired = erljwt:parse(JWT,?RSA_PUBLIC_KEY).
+
+iat_fail_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Now = erlang:system_time(seconds),
+    Claims = maps:merge(#{iat => (Now + 10)}, claims()),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    not_issued_in_past = erljwt:parse(JWT,?RSA_PUBLIC_KEY).
+
+iat_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Claims = claims(),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    timer:sleep(2000),
+    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    true = valid_claims(Claims, Result).
+
+nbf_fail_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Now = erlang:system_time(seconds),
+    Claims = maps:merge(#{nbf => (Now + 1)}, claims()),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    not_yet_valid = erljwt:parse(JWT,?RSA_PUBLIC_KEY).
+
+nbf_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Now = erlang:system_time(seconds),
+    Claims = maps:merge(#{nbf => (Now + 1)}, claims()),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    timer:sleep(2000),
+    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    true = valid_claims(Claims, Result).
+
+valid_claims(OrgClaims, #{claims := ExtClaims}) when is_map(ExtClaims) ->
+    io:format("org claims: ~p~n~next claims: ~p~n~n", [OrgClaims, ExtClaims]),
+    io:format("add iat ~p~n",[add_iat()]),
+    IatOk = (add_iat() == maps:is_key(iat, ExtClaims)),
+    SameClaims =
+        (ExtClaims == maps:merge(OrgClaims, maps:with([exp, iat], ExtClaims))),
+    application:unset_env(erljwt, add_iat),
+    io:format("iat ok: ~p, same claims: ~p~n", [IatOk, SameClaims]),
+    IatOk and SameClaims;
+valid_claims(_OrgClaims, _)  ->
+    io:format("no maps"),
+    application:unset_env(erljwt, add_iat),
+    false.
+
+garbage_test() ->
+    %% JWT = erljwt:create(rs256, claims(), 10, ?RSA_PRIVATE_KEY),
+    invalid = erljwt:parse(<<"abc">>, #{keys => []}),
     ok.
+
+claims() ->
+    #{iss => <<"me">>,
+      sub => <<"789049">>,
+      <<"aud">> => <<"someone">>,
+      <<"azp">> => <<"thesameone">>,
+      <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>}.
+
+add_iat() ->
+    application:get_env(erljwt, add_iat, true).
