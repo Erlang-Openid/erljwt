@@ -14,6 +14,13 @@ supported algorithm
  - HS384
  - HS512
 
+## Recomandation
+Please use the parse/3 funktion whith the second parameter being the list of allowed algorithms.
+```
+% allow only rs256 algorithm
+erljwt:parse(Jwt, [rs256], PublicKeys)
+```
+
 ## Smoke test example
 
 Compilation
