@@ -8,7 +8,11 @@ erljwt uses the jsone library for json parsing.
 supported algorithm
  - none
  - RS256
+ - RS384
+ - RS512
  - HS256
+ - HS384
+ - HS512
 
 ## Smoke test example
 
