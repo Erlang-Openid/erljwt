@@ -12,7 +12,7 @@
 -export([to_map/1]).
 -export([create/3, create/4]).
 
--define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256]).
+-define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256, rs384, rs512]).
 
 
 parse(Jwt, KeyList) ->
@@ -106,18 +106,21 @@ get_needed_key(Algo, _KeyId, [ Key ])
 get_needed_key(Algo, _KeyId, _)
  when Algo == hs256; Algo == hs384; Algo == hs512->
     too_many_keys;
-get_needed_key(rs256, KeyId, KeyList) ->
+get_needed_key(Algo, KeyId, KeyList)
+  when Algo == rs256; Algo == rs384; Algo == rs512 ->
     filter_rsa_key(KeyId, KeyList, []);
 get_needed_key(_, _, _) ->
     unknown_algorithm.
 
-jwt_check_signature(EncSignature, rs256, Payload,
-                    #{kty := <<"RSA">>, n := N, e:= E}) ->
+jwt_check_signature(EncSignature, Algo, Payload,
+                    #{kty := <<"RSA">>, n := N, e:= E})
+when Algo == rs256; Algo == rs384; Algo == rs512->
     Signature = safe_base64_decode(EncSignature),
     Decode = fun(Base64) ->
                      binary:decode_unsigned(safe_base64_decode(Base64))
              end,
-    crypto:verify(rsa, sha256, Payload, Signature, [Decode(E), Decode(N)]);
+    Hash = algo_to_hash(Algo),
+    crypto:verify(rsa, Hash, Payload, Signature, [Decode(E), Decode(N)]);
 jwt_check_signature(Signature, hs256, Payload, SharedKey)
   when is_list(SharedKey); is_binary(SharedKey)->
     Signature =:= jwt_sign(hs256, Payload, SharedKey);
@@ -133,6 +136,21 @@ jwt_check_signature(_Signature, _Algo, _Payload, Error) when is_atom(Error) ->
     Error;
 jwt_check_signature(_Signature, _Algo, _Payload, _Key) ->
     invalid.
+
+algo_to_hash(rs256) ->
+    sha256;
+algo_to_hash(rs384) ->
+    sha384;
+algo_to_hash(rs512) ->
+    sha512;
+algo_to_hash(hs256) ->
+    sha256;
+algo_to_hash(hs384) ->
+    sha384;
+algo_to_hash(hs512) ->
+    sha512.
+
+
 
 filter_rsa_key(_, [], []) ->
     no_key_found;
@@ -234,14 +252,12 @@ handle_signature(Signature, Payload) when is_binary(Signature) ->
 handle_signature(Error, _) when is_atom(Error) ->
     Error.
 
-jwt_sign(rs256, Payload, #'RSAPrivateKey'{} = Key) ->
-    base64url:encode(public_key:sign(Payload, sha256, Key));
-jwt_sign(hs256, Payload, Key) ->
-    base64url:encode(crypto:hmac(sha256, Key, Payload));
-jwt_sign(hs384, Payload, Key) ->
-    base64url:encode(crypto:hmac(sha384, Key, Payload));
-jwt_sign(hs512, Payload, Key) ->
-    base64url:encode(crypto:hmac(sha512, Key, Payload));
+jwt_sign(Algo, Payload, #'RSAPrivateKey'{} = Key)
+  when Algo == rs256; Algo == rs384; Algo == rs512 ->
+    base64url:encode(public_key:sign(Payload, algo_to_hash(Algo), Key));
+jwt_sign(Algo, Payload, Key)
+  when Algo == hs256; Algo == hs384; Algo == hs512 ->
+    base64url:encode(crypto:hmac(algo_to_hash(Algo), Key, Payload));
 jwt_sign(none, _Payload, _Key) ->
     <<"">>;
 jwt_sign(_, _, _) ->
@@ -249,6 +265,10 @@ jwt_sign(_, _, _) ->
 
 jwt_header(rs256) ->
     #{ alg => <<"RS256">>, typ => <<"JWT">>};
+jwt_header(rs384) ->
+    #{ alg => <<"RS384">>, typ => <<"JWT">>};
+jwt_header(rs512) ->
+    #{ alg => <<"RS512">>, typ => <<"JWT">>};
 jwt_header(hs256) ->
     #{ alg => <<"HS256">>, typ => <<"JWT">>};
 jwt_header(hs384) ->
@@ -263,14 +283,18 @@ jwt_header(_) ->
 
 algo_to_atom(<<"none">>) ->
     none;
+algo_to_atom(<<"RS256">>) ->
+    rs256;
+algo_to_atom(<<"RS384">>) ->
+    rs384;
+algo_to_atom(<<"RS512">>) ->
+    rs512;
 algo_to_atom(<<"HS256">>) ->
     hs256;
 algo_to_atom(<<"HS384">>) ->
     hs384;
 algo_to_atom(<<"HS512">>) ->
     hs512;
-algo_to_atom(<<"RS256">>) ->
-    rs256;
 algo_to_atom(_) ->
     unknown.
 

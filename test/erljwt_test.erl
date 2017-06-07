@@ -52,13 +52,26 @@ hs512_roundtrip_test() ->
     Result = erljwt:parse(JWT,Key),
     true = valid_claims(Claims, Result).
 
-rsa256_roundtrip_test() ->
+rs256_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
     Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
     true = valid_claims(Claims, Result).
 
+rs384_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(rs384, Claims, 10, ?RSA_PRIVATE_KEY),
+    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    true = valid_claims(Claims, Result).
+
+rs512_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(rs512, Claims, 10, ?RSA_PRIVATE_KEY),
+    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    true = valid_claims(Claims, Result).
 
 unsupported_alg_test() ->
     application:set_env(erljwt, add_iat, false),
