@@ -12,7 +12,7 @@
 -export([to_map/1]).
 -export([create/3, create/4]).
 
--define(ALL_ALGOS, [none, hs256, rs256]).
+-define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256]).
 
 
 parse(Jwt, KeyList) ->
@@ -100,9 +100,11 @@ return_validation_result(Error, _, _, _, _) ->
 
 get_needed_key(none, _, _) ->
     <<>>;
-get_needed_key(hs256, _KeyId, [ Key ]) ->
+get_needed_key(Algo, _KeyId, [ Key ])
+ when Algo == hs256; Algo == hs384; Algo == hs512->
     Key;
-get_needed_key(hs256, _KeyId, _) ->
+get_needed_key(Algo, _KeyId, _)
+ when Algo == hs256; Algo == hs384; Algo == hs512->
     too_many_keys;
 get_needed_key(rs256, KeyId, KeyList) ->
     filter_rsa_key(KeyId, KeyList, []);
@@ -119,6 +121,12 @@ jwt_check_signature(EncSignature, rs256, Payload,
 jwt_check_signature(Signature, hs256, Payload, SharedKey)
   when is_list(SharedKey); is_binary(SharedKey)->
     Signature =:= jwt_sign(hs256, Payload, SharedKey);
+jwt_check_signature(Signature, hs384, Payload, SharedKey)
+  when is_list(SharedKey); is_binary(SharedKey)->
+    Signature =:= jwt_sign(hs384, Payload, SharedKey);
+jwt_check_signature(Signature, hs512, Payload, SharedKey)
+  when is_list(SharedKey); is_binary(SharedKey)->
+    Signature =:= jwt_sign(hs512, Payload, SharedKey);
 jwt_check_signature(Signature, none, _Payload, _Key) ->
     Signature =:= <<"">>;
 jwt_check_signature(_Signature, _Algo, _Payload, Error) when is_atom(Error) ->
@@ -230,6 +238,10 @@ jwt_sign(rs256, Payload, #'RSAPrivateKey'{} = Key) ->
     base64url:encode(public_key:sign(Payload, sha256, Key));
 jwt_sign(hs256, Payload, Key) ->
     base64url:encode(crypto:hmac(sha256, Key, Payload));
+jwt_sign(hs384, Payload, Key) ->
+    base64url:encode(crypto:hmac(sha384, Key, Payload));
+jwt_sign(hs512, Payload, Key) ->
+    base64url:encode(crypto:hmac(sha512, Key, Payload));
 jwt_sign(none, _Payload, _Key) ->
     <<"">>;
 jwt_sign(_, _, _) ->
@@ -239,6 +251,10 @@ jwt_header(rs256) ->
     #{ alg => <<"RS256">>, typ => <<"JWT">>};
 jwt_header(hs256) ->
     #{ alg => <<"HS256">>, typ => <<"JWT">>};
+jwt_header(hs384) ->
+    #{ alg => <<"HS384">>, typ => <<"JWT">>};
+jwt_header(hs512) ->
+    #{ alg => <<"HS512">>, typ => <<"JWT">>};
 jwt_header(none) ->
     #{ alg => <<"none">>, typ => <<"JWT">>};
 jwt_header(_) ->
@@ -249,6 +265,10 @@ algo_to_atom(<<"none">>) ->
     none;
 algo_to_atom(<<"HS256">>) ->
     hs256;
+algo_to_atom(<<"HS384">>) ->
+    hs384;
+algo_to_atom(<<"HS512">>) ->
+    hs512;
 algo_to_atom(<<"RS256">>) ->
     rs256;
 algo_to_atom(_) ->

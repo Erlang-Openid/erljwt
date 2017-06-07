@@ -36,6 +36,22 @@ hs256_roundtrip_test() ->
     Result = erljwt:parse(JWT,Key),
     true = valid_claims(Claims, Result).
 
+hs384_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    Key = <<"my secret key">>,
+    JWT = erljwt:create(hs384,Claims, 10, Key),
+    Result = erljwt:parse(JWT,Key),
+    true = valid_claims(Claims, Result).
+
+hs512_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    Key = <<"my secret key">>,
+    JWT = erljwt:create(hs512,Claims, 10, Key),
+    Result = erljwt:parse(JWT,Key),
+    true = valid_claims(Claims, Result).
+
 rsa256_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
@@ -112,8 +128,8 @@ valid_claims(OrgClaims, #{claims := ExtClaims}) when is_map(ExtClaims) ->
     application:unset_env(erljwt, add_iat),
     io:format("iat ok: ~p, same claims: ~p~n", [IatOk, SameClaims]),
     IatOk and SameClaims;
-valid_claims(_OrgClaims, _)  ->
-    io:format("no maps"),
+valid_claims(OrgClaims, Result)  ->
+    io:format("no maps:~norg claims ~p~n~nresult: ~p~n", [OrgClaims, Result]),
     application:unset_env(erljwt, add_iat),
     false.
 
