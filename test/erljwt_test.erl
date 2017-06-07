@@ -117,6 +117,20 @@ valid_claims(_OrgClaims, _)  ->
     application:unset_env(erljwt, add_iat),
     false.
 
+algo_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    Result = erljwt:parse(JWT, [rs256], ?RSA_PUBLIC_KEY),
+    true = valid_claims(Claims, Result).
+
+algo_fail_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    Key = <<"my secret key">>,
+    JWT = erljwt:create(hs256,Claims, 10, Key),
+    algo_not_allowed = erljwt:parse(JWT, [rs256], ?RSA_PUBLIC_KEY).
+
 garbage_test() ->
     %% JWT = erljwt:create(rs256, claims(), 10, ?RSA_PRIVATE_KEY),
     invalid = erljwt:parse(<<"abc">>, #{keys => []}),

@@ -8,15 +8,23 @@
 -include_lib("public_key/include/public_key.hrl").
 
 -export([parse/2]).
+-export([parse/3]).
 -export([to_map/1]).
 -export([create/3, create/4]).
 
-parse(Jwt, KeyList) when is_list(KeyList) ->
-    validate_jwt(jwt_to_map(Jwt), KeyList);
-parse(Jwt, #{keys := KeyList}) ->
-    parse(Jwt, KeyList);
-parse(Jwt, Key) ->
-    parse(Jwt, [to_jwk(Key)]).
+-define(ALL_ALGOS, [none, hs256, rs256]).
+
+
+parse(Jwt, KeyList) ->
+    parse(Jwt, ?ALL_ALGOS, KeyList).
+
+parse(Jwt, AllowedAlgos, KeyList)
+  when is_list(KeyList), is_list(AllowedAlgos) ->
+    validate_jwt(jwt_to_map(Jwt), AllowedAlgos, KeyList);
+parse(Jwt, AllowedAlgos, #{keys := KeyList}) ->
+    parse(Jwt, AllowedAlgos, KeyList);
+parse(Jwt,AllowedAlgos, Key) ->
+    parse(Jwt, AllowedAlgos, [to_jwk(Key)]).
 
 to_map(Jwt) ->
     maps:with([header, claims, signature], jwt_to_map(Jwt)).
@@ -49,10 +57,11 @@ to_jwk(Key) ->
 jwt_to_map(Jwt) ->
     decode_jwt(split_jwt_token(Jwt)).
 
-validate_jwt(#{ header := Header, claims := Claims} = Jwt, KeyList) ->
-    Algorithm = maps:get(alg, Header, undefined),
+validate_jwt(#{ header := Header, claims := Claims} = Jwt, Algos, KeyList) ->
+    Algo = algo_to_atom(maps:get(alg, Header, undefined)),
+    ValidAlgo = lists:member(Algo, Algos),
     KeyId = maps:get(kid, Header, undefined),
-    ValidSignature = validate_signature(Algorithm, KeyId, Jwt, KeyList),
+    ValidSignature = validate_signature(ValidAlgo, Algo, KeyId, Jwt, KeyList),
     ExpiresAt  = maps:get(exp, Claims, undefined),
     NotBefore  = maps:get(nbf, Claims, undefined),
     IssuedAt  = maps:get(iat, Claims, undefined),
@@ -61,15 +70,17 @@ validate_jwt(#{ header := Header, claims := Claims} = Jwt, KeyList) ->
     IssuedInPast = already_valid(IssuedAt),
     return_validation_result(ValidSignature, StillValid, AlreadyValid,
                              IssuedInPast, Jwt);
-validate_jwt(_, _) ->
+validate_jwt(_, _, _) ->
     invalid.
 
-validate_signature(Algorithm, KeyId, #{signature := Signature,
+validate_signature(true, Algorithm, KeyId, #{signature := Signature,
                                        payload := Payload}, KeyList)
-  when is_binary(Algorithm) ->
+  when is_atom(Algorithm) ->
     Key = get_needed_key(Algorithm, KeyId, KeyList),
     jwt_check_signature(Signature, Algorithm, Payload, Key);
-validate_signature(_, _, _, _) ->
+validate_signature(false, _, _, _, _) ->
+    algo_not_allowed;
+validate_signature(_, _, _, _, _) ->
     false.
 
 return_validation_result(true, true, true, true, Jwt) ->
@@ -87,28 +98,28 @@ return_validation_result(Error, _, _, _, _) ->
 
 
 
-get_needed_key(<<"none">>, _, _) ->
+get_needed_key(none, _, _) ->
     <<>>;
-get_needed_key(<<"HS256">>, _KeyId, [ Key ]) ->
+get_needed_key(hs256, _KeyId, [ Key ]) ->
     Key;
-get_needed_key(<<"HS256">>, _KeyId, _) ->
+get_needed_key(hs256, _KeyId, _) ->
     too_many_keys;
-get_needed_key(<<"RS256">>, KeyId, KeyList) ->
+get_needed_key(rs256, KeyId, KeyList) ->
     filter_rsa_key(KeyId, KeyList, []);
 get_needed_key(_, _, _) ->
     unknown_algorithm.
 
-jwt_check_signature(EncSignature, <<"RS256">>, Payload,
+jwt_check_signature(EncSignature, rs256, Payload,
                     #{kty := <<"RSA">>, n := N, e:= E}) ->
     Signature = safe_base64_decode(EncSignature),
     Decode = fun(Base64) ->
                      binary:decode_unsigned(safe_base64_decode(Base64))
              end,
     crypto:verify(rsa, sha256, Payload, Signature, [Decode(E), Decode(N)]);
-jwt_check_signature(Signature, <<"HS256">>, Payload, SharedKey)
+jwt_check_signature(Signature, hs256, Payload, SharedKey)
   when is_list(SharedKey); is_binary(SharedKey)->
     Signature =:= jwt_sign(hs256, Payload, SharedKey);
-jwt_check_signature(Signature, <<"none">>, _Payload, _Key) ->
+jwt_check_signature(Signature, none, _Payload, _Key) ->
     Signature =:= <<"">>;
 jwt_check_signature(_Signature, _Algo, _Payload, Error) when is_atom(Error) ->
     Error;
@@ -232,6 +243,19 @@ jwt_header(none) ->
     #{ alg => <<"none">>, typ => <<"JWT">>};
 jwt_header(_) ->
     #{ typ => <<"JWT">>}.
+
+
+algo_to_atom(<<"none">>) ->
+    none;
+algo_to_atom(<<"HS256">>) ->
+    hs256;
+algo_to_atom(<<"RS256">>) ->
+    rs256;
+algo_to_atom(_) ->
+    unknown.
+
+
+
 
 safe_base64_decode(Base64) ->
     Fun = fun() ->
