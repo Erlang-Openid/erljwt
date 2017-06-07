@@ -22,14 +22,16 @@ to_map(Jwt) ->
     maps:with([header, claims, signature], jwt_to_map(Jwt)).
 
 create(Alg, ClaimSetMap, Key) when is_map(ClaimSetMap) ->
-    ClaimSet = base64url:encode(jsone:encode(ClaimSetMap)),
+    create(Alg, ClaimSetMap, undefined, Key).
+
+create(Alg, ClaimSetMap, ExpirationSeconds, Key) when is_map(ClaimSetMap) ->
+    NeedsIat = not maps:is_key(iat, ClaimSetMap),
+    AddIat = application:get_env(erljwt, add_iat, true) and NeedsIat,
+    ClaimSetExpMap = jwt_add_claims(AddIat, ExpirationSeconds, ClaimSetMap),
+    ClaimSet = base64url:encode(jsone:encode(ClaimSetExpMap)),
     Header = base64url:encode(jsone:encode(jwt_header(Alg))),
     Payload = <<Header/binary, ".", ClaimSet/binary>>,
     return_signed_jwt(Alg, Payload, Key).
-
-create(Alg, ClaimSetMap, ExpirationSeconds, Key) when is_map(ClaimSetMap) ->
-    ClaimSetExpMap = jwt_add_exp(ClaimSetMap, ExpirationSeconds),
-    create(Alg, ClaimSetExpMap, Key).
 
 
 %% ========================================================================
@@ -52,8 +54,13 @@ validate_jwt(#{ header := Header, claims := Claims} = Jwt, KeyList) ->
     KeyId = maps:get(kid, Header, undefined),
     ValidSignature = validate_signature(Algorithm, KeyId, Jwt, KeyList),
     ExpiresAt  = maps:get(exp, Claims, undefined),
+    NotBefore  = maps:get(nbf, Claims, undefined),
+    IssuedAt  = maps:get(iat, Claims, undefined),
     StillValid = still_valid(ExpiresAt),
-    return_validation_result(ValidSignature, StillValid, Jwt);
+    AlreadyValid = already_valid(NotBefore),
+    IssuedInPast = already_valid(IssuedAt),
+    return_validation_result(ValidSignature, StillValid, AlreadyValid,
+                             IssuedInPast, Jwt);
 validate_jwt(_, _) ->
     invalid.
 
@@ -65,11 +72,17 @@ validate_signature(Algorithm, KeyId, #{signature := Signature,
 validate_signature(_, _, _, _) ->
     false.
 
-return_validation_result(true, true, Jwt) ->
+return_validation_result(true, true, true, true, Jwt) ->
     maps:with([header, claims, signature], Jwt);
-return_validation_result(true, false, _) ->
+return_validation_result(false, _, _, _, _) ->
+    invalid;
+return_validation_result(_, false, _, _, _) ->
     expired;
-return_validation_result(Error, _, _) ->
+return_validation_result(_, _, false, _, _) ->
+    not_yet_valid;
+return_validation_result(_, _, _, false, _) ->
+    not_issued_in_past;
+return_validation_result(Error, _, _, _, _) ->
     Error.
 
 
@@ -131,6 +144,15 @@ still_valid(ExpiresAt) when is_number(ExpiresAt) ->
 still_valid(_) ->
     false.
 
+already_valid(undefined) ->
+    true;
+already_valid(NotBefore) when is_number(NotBefore) ->
+    SecondsPassed = epoch() - NotBefore,
+    io:format("seconds passed: ~p~n", [SecondsPassed]),
+    SecondsPassed >= 0;
+already_valid(_) ->
+    false.
+
 
 split_jwt_token(Token) ->
     binary:split(Token, [<<".">>], [global]).
@@ -173,9 +195,17 @@ return_decoded_jwt_or_error(_, _) ->
     invalid.
 
 
-jwt_add_exp(ClaimSetMap, ExpirationSeconds) ->
-    Expiration = epoch() + ExpirationSeconds,
-    maps:put(exp, Expiration, ClaimSetMap).
+jwt_add_claims(false, undefined, ClaimsMap) ->
+    ClaimsMap;
+jwt_add_claims(true, ExpSeconds, ClaimsMap) ->
+    Now = epoch(),
+    NewClaims = maps:put(iat, Now, ClaimsMap),
+    jwt_add_claims(false, ExpSeconds, NewClaims);
+jwt_add_claims(AddIat, ExpSeconds, ClaimsMap)  ->
+    Expiration = epoch() + ExpSeconds,
+    NewClaims = maps:put(exp, Expiration, ClaimsMap),
+    jwt_add_claims(AddIat, undefined, NewClaims).
+
 
 return_signed_jwt(Alg, Payload, Key) ->
     handle_signature(jwt_sign(Alg, Payload, Key), Payload).
@@ -203,10 +233,6 @@ jwt_header(none) ->
 jwt_header(_) ->
     #{ typ => <<"JWT">>}.
 
-epoch() ->
-    UniversalNow = calendar:now_to_universal_time(os:timestamp()),
-    calendar:datetime_to_gregorian_seconds(UniversalNow) - 719528 * 24 * 3600.
-
 safe_base64_decode(Base64) ->
     Fun = fun() ->
                   base64url:decode(Base64)
@@ -229,3 +255,6 @@ result_or_invalid(Fun) ->
     catch _:_ ->
             invalid
     end.
+
+epoch() ->
+    erlang:system_time(seconds).
