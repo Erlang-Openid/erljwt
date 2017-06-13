@@ -7,24 +7,29 @@
 
 -include_lib("public_key/include/public_key.hrl").
 
--export([parse/2]).
--export([parse/3]).
+-export([check_sig/3]).
+-export([validate/4]).
 -export([to_map/1]).
 -export([create/3, create/4]).
+-export([algorithms/0]).
 
 -define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256, rs384, rs512]).
+                    %% es256, es384, es512]).
 
 
-parse(Jwt, KeyList) ->
-    parse(Jwt, ?ALL_ALGOS, KeyList).
+algorithms() ->
+    ?ALL_ALGOS.
 
-parse(Jwt, AllowedAlgos, KeyList)
-  when is_list(KeyList), is_list(AllowedAlgos) ->
-    validate_jwt(jwt_to_map(Jwt), AllowedAlgos, KeyList);
-parse(Jwt, AllowedAlgos, #{keys := KeyList}) ->
-    parse(Jwt, AllowedAlgos, KeyList);
-parse(Jwt,AllowedAlgos, Key) ->
-    parse(Jwt, AllowedAlgos, [to_jwk(Key)]).
+check_sig(Jwt,AllowedAlgos, Key) ->
+    validate(Jwt, AllowedAlgos, #{}, Key).
+
+validate(Jwt, AllowedAlgos, ExpClaims, KeyList)
+  when is_list(KeyList), is_list(AllowedAlgos), is_map(ExpClaims) ->
+    validate_jwt(jwt_to_map(Jwt), AllowedAlgos, ExpClaims, KeyList);
+validate(Jwt, AllowedAlgos, Claims, #{keys := KeyList}) ->
+    validate(Jwt, AllowedAlgos, Claims, KeyList);
+validate(Jwt, AllowedAlgos, Claims, #{kty := _} = Key) ->
+    validate(Jwt, AllowedAlgos, Claims, [Key]).
 
 to_map(Jwt) ->
     maps:with([header, claims, signature], jwt_to_map(Jwt)).
@@ -36,28 +41,21 @@ create(Alg, ClaimSetMap, ExpirationSeconds, Key) when is_map(ClaimSetMap) ->
     NeedsIat = not maps:is_key(iat, ClaimSetMap),
     AddIat = application:get_env(erljwt, add_iat, true) and NeedsIat,
     ClaimSetExpMap = jwt_add_claims(AddIat, ExpirationSeconds, ClaimSetMap),
-    ClaimSet = base64url:encode(jsone:encode(ClaimSetExpMap)),
-    Header = base64url:encode(jsone:encode(jwt_header(Alg))),
-    Payload = <<Header/binary, ".", ClaimSet/binary>>,
-    return_signed_jwt(Alg, Payload, Key).
+        ClaimSet = base64url:encode(jsone:encode(ClaimSetExpMap)),
+        Header = base64url:encode(jsone:encode(jwt_header(Alg))),
+        Payload = <<Header/binary, ".", ClaimSet/binary>>,
+        return_signed_jwt(Alg, Payload, Key).
 
 
 %% ========================================================================
 %%                       INTERNAL
 %% ========================================================================
 
-to_jwk(#'RSAPublicKey'{ modulus = N, publicExponent = E}) ->
-    Encode = fun(Int) ->
-                     base64url:encode(binary:encode_unsigned(Int))
-             end,
-    #{kty => <<"RSA">>, e => Encode(E), n => Encode(N) };
-to_jwk(Key) ->
-    Key.
-
 jwt_to_map(Jwt) ->
     decode_jwt(split_jwt_token(Jwt)).
 
-validate_jwt(#{ header := Header, claims := Claims} = Jwt, Algos, KeyList) ->
+validate_jwt(#{ header := Header, claims := Claims} = Jwt, Algos, ExpClaims,
+             KeyList) ->
     Algo = algo_to_atom(maps:get(alg, Header, undefined)),
     ValidAlgo = lists:member(Algo, Algos),
     KeyId = maps:get(kid, Header, undefined),
@@ -68,13 +66,14 @@ validate_jwt(#{ header := Header, claims := Claims} = Jwt, Algos, KeyList) ->
     StillValid = still_valid(ExpiresAt),
     AlreadyValid = already_valid(NotBefore),
     IssuedInPast = already_valid(IssuedAt),
+    InvalidClaims = validate_claims(Claims, maps:to_list(ExpClaims), []),
     return_validation_result(ValidSignature, StillValid, AlreadyValid,
-                             IssuedInPast, Jwt);
-validate_jwt(_, _, _) ->
+                             IssuedInPast, InvalidClaims, Jwt);
+validate_jwt(_, _, _, _) ->
     invalid.
 
 validate_signature(true, Algorithm, KeyId, #{signature := Signature,
-                                       payload := Payload}, KeyList)
+                                             payload := Payload}, KeyList)
   when is_atom(Algorithm) ->
     Key = get_needed_key(Algorithm, KeyId, KeyList),
     jwt_check_signature(Signature, Algorithm, Payload, Key);
@@ -83,53 +82,79 @@ validate_signature(false, _, _, _, _) ->
 validate_signature(_, _, _, _, _) ->
     false.
 
-return_validation_result(true, true, true, true, Jwt) ->
+validate_claims(_, [], InvalidClaims) ->
+    InvalidClaims;
+validate_claims(Claims, [{Key, Value} | Tail], InvalidClaims) ->
+    AKey = try_to_atom(Key),
+    ClaimValue = maps:get(AKey, Claims, undefined),
+    NewInvalidClaims = validate_claim(AKey, Value, ClaimValue, InvalidClaims),
+    validate_claims(Claims, Tail, NewInvalidClaims).
+
+validate_claim(_Key, Value, Value, InvalidClaims) ->
+    InvalidClaims;
+validate_claim(aud, ListOfAud, Aud, InvalidClaims) when is_list(ListOfAud) ->
+    Member = lists:is_member(Aud, ListOfAud),
+    add_key_if_false(Member, aud, InvalidClaims);
+validate_claim(Key, _, _, InvalidClaims) ->
+    [ Key | InvalidClaims].
+
+add_key_if_false(false, Key, InvalidClaims) ->
+    [Key | InvalidClaims];
+add_key_if_false(_, _Key, InvalidClaims) ->
+    InvalidClaims.
+
+
+return_validation_result(true, true, true, true, [], Jwt) ->
     maps:with([header, claims, signature], Jwt);
-return_validation_result(false, _, _, _, _) ->
+return_validation_result(false, _, _, _, _, _) ->
     invalid;
-return_validation_result(_, false, _, _, _) ->
+return_validation_result(true, false, _, _, _, _) ->
     expired;
-return_validation_result(_, _, false, _, _) ->
+return_validation_result(true, _, false, _, _, _) ->
     not_yet_valid;
-return_validation_result(_, _, _, false, _) ->
+return_validation_result(true, _, _, false, _, _) ->
     not_issued_in_past;
-return_validation_result(Error, _, _, _, _) ->
+return_validation_result(true, _, _, _, InvalidClaims, _)
+  when InvalidClaims /= []->
+    {invalid_claims, InvalidClaims};
+return_validation_result(Error, _, _, _, [], _) ->
     Error.
 
 
 
 get_needed_key(none, _, _) ->
     <<>>;
-get_needed_key(Algo, _KeyId, [ Key ])
- when Algo == hs256; Algo == hs384; Algo == hs512->
-    Key;
-get_needed_key(Algo, _KeyId, _)
- when Algo == hs256; Algo == hs384; Algo == hs512->
-    too_many_keys;
+get_needed_key(Algo, KeyId, KeyList)
+  when Algo == hs256; Algo == hs384; Algo == hs512->
+    filter_oct_key(KeyId, KeyList);
 get_needed_key(Algo, KeyId, KeyList)
   when Algo == rs256; Algo == rs384; Algo == rs512 ->
-    filter_rsa_key(KeyId, KeyList, []);
+    filter_rsa_key(KeyId, KeyList);
+get_needed_key(Algo, KeyId, KeyList)
+  when Algo == es256; Algo == es384; Algo == es512 ->
+    filter_ec_key(KeyId, Algo, KeyList);
 get_needed_key(_, _, _) ->
     unknown_algorithm.
 
 jwt_check_signature(EncSignature, Algo, Payload,
                     #{kty := <<"RSA">>, n := N, e:= E})
-when Algo == rs256; Algo == rs384; Algo == rs512->
+  when Algo == rs256; Algo == rs384; Algo == rs512->
     Signature = safe_base64_decode(EncSignature),
-    Decode = fun(Base64) ->
-                     binary:decode_unsigned(safe_base64_decode(Base64))
-             end,
     Hash = algo_to_hash(Algo),
-    crypto:verify(rsa, Hash, Payload, Signature, [Decode(E), Decode(N)]);
-jwt_check_signature(Signature, hs256, Payload, SharedKey)
-  when is_list(SharedKey); is_binary(SharedKey)->
-    Signature =:= jwt_sign(hs256, Payload, SharedKey);
-jwt_check_signature(Signature, hs384, Payload, SharedKey)
-  when is_list(SharedKey); is_binary(SharedKey)->
-    Signature =:= jwt_sign(hs384, Payload, SharedKey);
-jwt_check_signature(Signature, hs512, Payload, SharedKey)
-  when is_list(SharedKey); is_binary(SharedKey)->
-    Signature =:= jwt_sign(hs512, Payload, SharedKey);
+    crypto:verify(rsa, Hash, Payload, Signature,
+                  [base64_to_unsiged(E), base64_to_unsiged(N)]);
+jwt_check_signature(EncSignature, Algo, Payload,
+                    #{kty := <<"EC">>, x := X0, y := Y0})
+  when Algo == es256; Algo == es384; Algo == es512->
+    Signature = safe_base64_decode(EncSignature),
+    X = safe_base64_decode(X0),
+    Y = safe_base64_decode(Y0),
+    Key = << X/binary, Y/binary >>,
+    Curve = algo_to_curve(Algo),
+    crypto:verify(ecdsa, algo_to_hash(Algo), Payload, Signature, [Key, Curve]);
+jwt_check_signature(Signature, Algo, Payload, SharedKey)
+  when Algo == hs256; Algo == hs384; Algo == hs512 ->
+    Signature =:= jwt_sign(Algo, Payload, SharedKey);
 jwt_check_signature(Signature, none, _Payload, _Key) ->
     Signature =:= <<"">>;
 jwt_check_signature(_Signature, _Algo, _Payload, Error) when is_atom(Error) ->
@@ -137,40 +162,52 @@ jwt_check_signature(_Signature, _Algo, _Payload, Error) when is_atom(Error) ->
 jwt_check_signature(_Signature, _Algo, _Payload, _Key) ->
     invalid.
 
-algo_to_hash(rs256) ->
-    sha256;
-algo_to_hash(rs384) ->
-    sha384;
-algo_to_hash(rs512) ->
-    sha512;
-algo_to_hash(hs256) ->
-    sha256;
-algo_to_hash(hs384) ->
-    sha384;
-algo_to_hash(hs512) ->
-    sha512.
+filter_oct_key(KeyId, KeyList) ->
+    filter_key(KeyId, KeyList, [], <<"oct">>).
+
+filter_rsa_key(KeyId, KeyList) ->
+    filter_key(KeyId, KeyList, [], <<"RSA">>).
+
+filter_ec_key(KeyId, Algo, KeyList) ->
+    Keys = filter_key(KeyId, KeyList, [], <<"EC">>),
+    filter_curve(Keys, [], Algo).
+
+filter_curve([], [Key], _) ->
+    Key;
+filter_curve([#{crv := <<"P-256">>} = Key | Tail ], List, Algo)
+  when Algo == es256->
+    filter_curve(Tail, [Key | List], Algo);
+filter_curve([#{crv := <<"P-384">>} = Key | Tail ], List, Algo)
+  when Algo == es384->
+    filter_curve(Tail, [Key | List], Algo);
+filter_curve([#{crv := <<"P-521">>} = Key | Tail ], List, Algo)
+  when Algo == es512->
+    filter_curve(Tail, [Key | List], Algo);
+filter_curve([_ | Tail ], List, Algo) ->
+    filter_curve(Tail, List, Algo);
+filter_curve(Key, List, Algo) when is_map(Key) ->
+    filter_curve([Key], List, Algo).
 
 
-
-filter_rsa_key(_, [], []) ->
+filter_key(_, [], [], _Type) ->
     no_key_found;
-filter_rsa_key(_, [], [Key]) ->
+filter_key(_, [], [Key], _Type) ->
     Key;
-filter_rsa_key(_, [], _) ->
+filter_key(_, [], _, _Type) ->
     too_many_keys;
-filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, kid:= KeyId } = Key | _], _) ->
+filter_key(KeyId, [ #{kty := Type, kid:= KeyId } = Key | _], _, Type) ->
     Key;
-filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, kid := _Other} | Tail], List ) ->
-    filter_rsa_key(KeyId, Tail, List);
-filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, use:=<<"sig">>} = Key | Tail],
-               List ) ->
-    filter_rsa_key(KeyId, Tail, [ Key | List ] );
-filter_rsa_key(KeyId, [ #{kty := <<"RSA">>, use:= _} | Tail], List ) ->
-    filter_rsa_key(KeyId, Tail, List);
-filter_rsa_key(KeyId, [ #{kty := <<"RSA">>} = Key | Tail], List ) ->
-    filter_rsa_key(KeyId, Tail, [ Key | List ] );
-filter_rsa_key(KeyId, [ _ | Tail ], List) ->
-    filter_rsa_key(KeyId, Tail, List).
+filter_key(KeyId, [ #{kty := Type, kid := _Other} | Tail], List, Type) ->
+    filter_key(KeyId, Tail, List, Type);
+filter_key(KeyId, [ #{kty := Type, use:=<<"sig">>} = Key | Tail],
+           List, Type) ->
+    filter_key(KeyId, Tail, [ Key | List ], Type);
+filter_key(KeyId, [ #{kty := Type, use:= _} | Tail], List, Type) ->
+    filter_key(KeyId, Tail, List, Type);
+filter_key(KeyId, [ #{kty := Type} = Key | Tail], List, Type) ->
+    filter_key(KeyId, Tail, [ Key | List ], Type);
+filter_key(KeyId, [ _ | Tail ], List, Type) ->
+    filter_key(KeyId, Tail, List, Type).
 
 
 still_valid(undefined) ->
@@ -185,7 +222,6 @@ already_valid(undefined) ->
     true;
 already_valid(NotBefore) when is_number(NotBefore) ->
     SecondsPassed = epoch() - NotBefore,
-    io:format("seconds passed: ~p~n", [SecondsPassed]),
     SecondsPassed >= 0;
 already_valid(_) ->
     false.
@@ -252,52 +288,81 @@ handle_signature(Signature, Payload) when is_binary(Signature) ->
 handle_signature(Error, _) when is_atom(Error) ->
     Error.
 
-jwt_sign(Algo, Payload, #'RSAPrivateKey'{} = Key)
+jwt_sign(Algo, Payload, Key)
   when Algo == rs256; Algo == rs384; Algo == rs512 ->
-    base64url:encode(public_key:sign(Payload, algo_to_hash(Algo), Key));
+    base64url:encode(crypto:sign(rsa, algo_to_hash(Algo), Payload,
+                                 convert_key(Key)));
+jwt_sign(Algo, Payload, Key)
+  when Algo == es256; Algo == es384; Algo == es512 ->
+    base64url:encode(crypto:sign(ecdsa, algo_to_hash(Algo), Payload,
+                                 [convert_key(Key), algo_to_curve(Algo)]));
 jwt_sign(Algo, Payload, Key)
   when Algo == hs256; Algo == hs384; Algo == hs512 ->
-    base64url:encode(crypto:hmac(algo_to_hash(Algo), Key, Payload));
+    base64url:encode(crypto:hmac(algo_to_hash(Algo), convert_key(Key),
+                                 Payload));
 jwt_sign(none, _Payload, _Key) ->
     <<"">>;
 jwt_sign(_, _, _) ->
     alg_not_supported.
 
-jwt_header(rs256) ->
-    #{ alg => <<"RS256">>, typ => <<"JWT">>};
-jwt_header(rs384) ->
-    #{ alg => <<"RS384">>, typ => <<"JWT">>};
-jwt_header(rs512) ->
-    #{ alg => <<"RS512">>, typ => <<"JWT">>};
-jwt_header(hs256) ->
-    #{ alg => <<"HS256">>, typ => <<"JWT">>};
-jwt_header(hs384) ->
-    #{ alg => <<"HS384">>, typ => <<"JWT">>};
-jwt_header(hs512) ->
-    #{ alg => <<"HS512">>, typ => <<"JWT">>};
-jwt_header(none) ->
-    #{ alg => <<"none">>, typ => <<"JWT">>};
-jwt_header(_) ->
+convert_key(#{kty := <<"oct">>, k := Key}) ->
+    Key;
+convert_key(#{kty := <<"RSA">>,
+              n := N, e := E, d := D }) ->
+    [base64_to_unsiged(E), base64_to_unsiged(N), base64_to_unsiged(D)];
+convert_key(#{kty := <<"EC">>, d := D}) ->
+    base64_to_unsiged(D).
+
+jwt_header(Algo) ->
+    create_header(algo_to_binary(Algo)).
+create_header(Algo) when is_binary(Algo) ->
+    #{ alg => Algo, typ => <<"JWT">>};
+create_header(_) ->
     #{ typ => <<"JWT">>}.
 
+-define(ALGO_MAPPING, [
+                       { none, <<"none">> , none, undefined},
+                       { rs256, <<"RS256">>, sha256, undefined },
+                       { rs384, <<"RS384">>, sha384, undefined },
+                       { rs512, <<"RS512">>, sha512, undefined },
+                       { es256, <<"ES256">>, sha256, secp256r1 },
+                       { es384, <<"ES384">>, sha384, secp384r1 },
+                       { es512, <<"ES512">>, sha512, secp521r1 },
+                       { hs256, <<"HS256">>, sha256, undefined },
+                       { hs384, <<"HS384">>, sha384, undefined },
+                       { hs512, <<"HS512">>, sha512, undefined }
+                      ]).
 
-algo_to_atom(<<"none">>) ->
-    none;
-algo_to_atom(<<"RS256">>) ->
-    rs256;
-algo_to_atom(<<"RS384">>) ->
-    rs384;
-algo_to_atom(<<"RS512">>) ->
-    rs512;
-algo_to_atom(<<"HS256">>) ->
-    hs256;
-algo_to_atom(<<"HS384">>) ->
-    hs384;
-algo_to_atom(<<"HS512">>) ->
-    hs512;
-algo_to_atom(_) ->
-    unknown.
+algo_to_atom(Name) ->
+    handle_find_result(lists:keyfind(Name, 2, ?ALGO_MAPPING), 1).
 
+algo_to_binary(Atom) ->
+    handle_find_result(lists:keyfind(Atom, 1, ?ALGO_MAPPING), 2).
+
+algo_to_hash(Atom) ->
+    handle_find_result(lists:keyfind(Atom, 1, ?ALGO_MAPPING), 3).
+
+algo_to_curve(Atom) ->
+    handle_find_result(lists:keyfind(Atom, 1, ?ALGO_MAPPING), 4).
+
+handle_find_result(false, _) ->
+    unknown;
+handle_find_result(Term, Index) ->
+    element(Index, Term).
+
+
+try_to_atom(Bin) when is_binary(Bin) ->
+    try
+        binary_to_existing_atom(Bin, utf8)
+    of
+        Atom -> Atom
+    catch _:_ ->
+            Bin
+    end;
+try_to_atom(List) when is_list(List) ->
+    try_to_atom(list_to_binary(List));
+try_to_atom(Other) ->
+    Other.
 
 
 
@@ -306,6 +371,9 @@ safe_base64_decode(Base64) ->
                   base64url:decode(Base64)
           end,
     result_or_invalid(Fun).
+
+base64_to_unsiged(Base64) ->
+    binary:decode_unsigned(safe_base64_decode(Base64)).
 
 
 safe_jsone_decode(Bin) ->
@@ -323,6 +391,7 @@ result_or_invalid(Fun) ->
     catch _:_ ->
             invalid
     end.
+
 
 epoch() ->
     erlang:system_time(seconds).
