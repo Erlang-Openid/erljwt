@@ -1,5 +1,6 @@
 -module(erljwt_test).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("public_key/include/public_key.hrl").
 
 -define(OCT_JWK, #{ kty => <<"oct">>, k => <<"my secret key">>} ).
 
@@ -9,13 +10,25 @@
                     d => <<"ZVo6RINcLXS37-Lm3Q6mmTG6BJl_uxAyW62zA_4fJBkulgoMnANhjfOzqJQgVNnGpBFJosLunorvYzWg0tV8WAUbIUZxzQaU1I4s_pgqsCK4KLM0gXG4Y926rR6Ntd4A8MZZhUi-EQS9-lNk6381J3kAgd9Y2hMDGNvMHu3G4kjYfsWq-KboZmJG8k4DnEPwxOC-6hgcXUXXxQTkymrlLqY7cty9nN4QICLXFij3KFDJqft87XCPwJ4yPKpfTJEdO5LVmUQ11C0lfpPoND3_F2yd3yXmyIJfUj-_1gSjvvL2VMLUOzwAU8XcSqrMIpFs2YjNkxtnYok0yBS5ZyPdwQ">>
                   }).
 
--define(EC_JWK, #{ kty => <<"EC">>, crv => <<"P-256">>,
-                   x => <<"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU">>,
-                   y => <<"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a1">>,
-                   d => <<"jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI">>
-                 }).
+-define(ES256_JWK, #{ kty => <<"EC">>, crv => <<"P-256">>,
+                      x => <<"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU">>,
+                      y => <<"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a1">>,
+                      d => <<"jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI">>
+                    }).
 
--define(JWS, #{keys => [?RSA_JWK, ?OCT_JWK, ?EC_JWK]}).
+-define(ES384_JWK, #{ kty => <<"EC">>, crv => <<"P-384">>,
+                      x => <<"kp3m6F7Zo349rSH2bUNSY86bGSGWzDOH-TUhklgTehJC1HnhHw7aRWZEYDQr93dY">>,
+                      y => <<"bxgu3eepDWqg0HmpelIUWwbZS8ULD3CQBiOlcmJEW_dltj6VVgu-hXyv0FbDdw_H">>,
+                      d => <<"c123iprPrEesbmTdtb2pR82vU2GBTlKWrcofXHzOmHeEP5ic8vy0q8bMCchoyZ9U">>
+                    }).
+
+-define(ES512_JWK, #{ kty => <<"EC">>, crv => <<"P-521">>,
+                      x => <<"AekpBQ8ST8a8VcfVOTNl353vSrDCLLJXmPk06wTjxrrjcBpXp5EOnYG_NjFZ6OvLFV1jSfS9tsz4qUxcWceqwQGk">>,
+                      y => <<"ADSmRA43Z1DSNx_RvcLI87cdL07l6jQyyBXMoxVg_l2Th-x3S1WDhjDly79ajL4Kkd0AZMaZmh9ubmf63e3kyMj2">>,
+                      d => <<"AY5pb7A0UFiB3RELSD64fTLOSV_jazdF7fLYyuTw8lOfRhWg6Y6rUrPAxerEzgdRhajnu0ferB0d53vM9mE15j2C">>
+                    }).
+
+-define(JWS, #{keys => [?RSA_JWK, ?OCT_JWK, ?ES256_JWK, ?ES384_JWK, ?ES512_JWK]}).
 
 
 
@@ -25,49 +38,12 @@ rs256_verification_test() ->
     expired = erljwt:check_sig(IdToken, [rs256], ?JWS),
     ok.
 
-compute_keys_test() ->
-    D = <<"jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI">>,
-    X =  <<"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU">>,
-    Y =  <<"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a1">>,
-    PrivKeyIn = base64url:decode(D),
-    {PubKey, PrivKey} = crypto:generate_key(ecdh, secp256r1, PrivKeyIn),
-    io:format("privkey in:  ~p~nprivkey out: ~p~n", [PrivKeyIn, PrivKey]),
-    io:format("encoded:~n~p~n~n~p~n~n", [base64url:encode(PrivKeyIn), base64url:encode(PrivKey)]),
-    PubX = base64url:decode(X),
-    PubY = base64url:decode(Y),
-    PubIn = << 4:8, PubX/binary, PubY/binary >>,
-    %% where does the 4 above come from?
-    io:format("pubkey:~n~p~n~n~p~n~p~n~p~n",[PubKey, PubX, PubY, PubIn]),
-    ?assertEqual(PubIn, PubKey),
+es256_verification_test() ->
+    JWT = <<"eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q">>,
+    io:format("~p~n", [erljwt:to_map(JWT)]),
+    expired = erljwt:validate(JWT, [es256], #{},  ?JWS),
     ok.
 
-
-
-%% raw_sign_test() ->
-%%     D = <<"jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI">>,
-%%     Payload = <<"eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ">>,
-%%     SignatureIn = <<"DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q">>,
-%%     Key = base64url:decode(D),
-%%     Signature = crypto:sign(ecdsa, sha256, Payload, [Key, secp256r1]),
-%%     SigIn = base64url:decode(SignatureIn),
-%%     %% ?assertEqual(byte_size(SigIn), byte_size(Signature)),
-%%     ?assertEqual(SigIn, Signature).
-
-
-crypto_roundtrip_test() ->
-    D = <<"jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI">>,
-    PrivKeyIn = base64url:decode(D),
-    Payload = <<"eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ">>,
-    {Pub, Priv} = crypto:generate_key(ecdh, secp256r1, PrivKeyIn),
-    Signature = crypto:sign(ecdsa, sha256, Payload, [Priv, secp256r1] ),
-    ?assertEqual(true, crypto:verify(ecdsa, sha256, Payload, Signature, [Pub, secp256r1])).
-
-
-%% ec256_verification_test() ->
-%%     JWT = <<"eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q">>,
-%%     io:format("~p~n", [erljwt:to_map(JWT)]),
-%%     expired = erljwt:validate(JWT, erljwt:algorithms(), #{},  ?JWS),
-%%     ok.
 
 none_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
@@ -118,13 +94,38 @@ rs512_roundtrip_test() ->
     Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
-%% ec256_roundtrip_test() ->
-%%     application:set_env(erljwt, add_iat, false),
-%%     Claims = claims(),
-%%     JWT = erljwt:create(es256, Claims, 10, ?EC_JWK),
-%%     io:format("created jwt: ~p~n", [erljwt:to_map(JWT)]),
-%%     Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
-%%     true = valid_claims(Claims, Result).
+es256_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(es256, Claims, 10, ?ES256_JWK),
+    Map = erljwt:to_map(JWT),
+    Sig = maps:get(signature, Map),
+    io:format("created jwt: ~p~n", [Map]),
+    io:format("signature length: ~p~n", [byte_size(base64url:decode(Sig))]),
+    Result = erljwt:validate(JWT, [es256], #{}, ?JWS),
+    true = valid_claims(Claims, Result).
+
+es384_roundtrip_test() ->
+    %% {PubKey, PrivKey} = crypto:generate_key(ecdh, secp384r1),
+    %% Bits = 4* (byte_size(PubKey) - 1),
+    %% << 4:8, X:Bits, Y:Bits >> = PubKey,
+    %% Key = #{ crv => <<"P-384">>, x => base64url:encode(binary:encode_unsigned(X)),
+    %%          y => base64url:encode(binary:encode_unsigned(Y)), d => base64url:encode(PrivKey)},
+    %% io:format("key: ~p~n", [Key]),
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(es384, Claims, 10, ?ES384_JWK),
+    io:format("created jwt: ~p~n", [erljwt:to_map(JWT)]),
+    Result = erljwt:validate(JWT, [es384], #{}, ?JWS),
+    true = valid_claims(Claims, Result).
+
+es512_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(es512, Claims, 10, ?ES512_JWK),
+    io:format("created jwt: ~p~n", [erljwt:to_map(JWT)]),
+    Result = erljwt:validate(JWT, [es512], #{}, ?JWS),
+    true = valid_claims(Claims, Result).
 
 unsupported_alg_test() ->
     application:set_env(erljwt, add_iat, false),
@@ -189,7 +190,6 @@ algo_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
-    %% Result = erljwt:check_sig(JWT, [rs256], ?JWS),
     Result = erljwt:validate(JWT, [rs256], Claims, ?JWS),
     true = valid_claims(Claims, Result).
 
@@ -200,7 +200,6 @@ algo_fail_test() ->
     algo_not_allowed = erljwt:check_sig(JWT, [rs256], ?JWS).
 
 garbage_test() ->
-    %% JWT = erljwt:create(rs256, claims(), 10, ?RSA_JWK),
     invalid = erljwt:validate(<<"abc">>, erljwt:algorithms(), #{}, #{keys => []}),
     ok.
 
