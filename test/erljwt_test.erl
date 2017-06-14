@@ -35,13 +35,13 @@
 rs256_verification_test() ->
     IdToken =
     <<"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE0NjA2MzE4MjEsImlzcyI6Imh0dHBzOi8vcHJvdG9uLnNjYy5raXQuZWR1Iiwic3ViIjoiam9lIiwiYXVkIjoiMTIzIiwiaWF0IjoxNDYwNjMxNTIxLCJhdXRoX3RpbWUiOjE0NjA2MzE1MjF9.nUKMCw_ppksTD49qWR7hs_FTNnVu2qaohnh67jANI9Cje7gaFi2puIsXbC_i0HoFnppR5mA_3B20f7X8O3UF3ZrgYyfjjAq5U3HeZ-Tx6xEd2EcJ-gfpVnoAJPa46Lx77NmApUyTAazXj8kjzgkh58_QDxujG13g55ckRG9qJfK3bX_h0ec07ARJWQSg_Zh8Q3lFB_iIbSDXOYegSAHhIpTxmuTA-qmPn3ySGIRirQt_-niek0-wyy5PAsxSU9lc42QIG7qdMLhvXsq5j52kPO9DA3vJNpGTloJ8H1AoE-ES8HpXH3RhRMe3cdiVyK2vTsPbRc0-GxkRZMKaocyOPQ">>,
-    expired = erljwt:check_sig(IdToken, [rs256], ?JWS),
+    {error, expired} = erljwt:check_sig(IdToken, [rs256], ?JWS),
     ok.
 
 es256_verification_test() ->
     JWT = <<"eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q">>,
     io:format("~p~n", [erljwt:to_map(JWT)]),
-    expired = erljwt:validate(JWT, [es256], #{},  ?JWS),
+    {error, expired} = erljwt:validate(JWT, [es256], #{},  ?JWS),
     ok.
 
 
@@ -49,60 +49,60 @@ none_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(none, Claims, 10, undefined),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 hs256_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(hs256,Claims, 10, ?OCT_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 hs384_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(hs384,Claims, 10, ?OCT_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 hs512_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(hs512,Claims, 10, ?OCT_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 rs256_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 rs384_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(rs384, Claims, 10, ?RSA_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 rs512_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(rs512, Claims, 10, ?RSA_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 es256_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(es256, Claims, 10, ?ES256_JWK),
-    Map = erljwt:to_map(JWT),
+    {ok, Map} = erljwt:to_map(JWT),
     Sig = maps:get(signature, Map),
     io:format("created jwt: ~p~n", [Map]),
     io:format("signature length: ~p~n", [byte_size(base64url:decode(Sig))]),
-    Result = erljwt:validate(JWT, [es256], #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, [es256], #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 es384_roundtrip_test() ->
@@ -110,7 +110,7 @@ es384_roundtrip_test() ->
     Claims = claims(),
     JWT = erljwt:create(es384, Claims, 10, ?ES384_JWK),
     io:format("created jwt: ~p~n", [erljwt:to_map(JWT)]),
-    Result = erljwt:validate(JWT, [es384], #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, [es384], #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 es512_roundtrip_test() ->
@@ -118,7 +118,7 @@ es512_roundtrip_test() ->
     Claims = claims(),
     JWT = erljwt:create(es512, Claims, 10, ?ES512_JWK),
     io:format("created jwt: ~p~n", [erljwt:to_map(JWT)]),
-    Result = erljwt:validate(JWT, [es512], #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, [es512], #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 unsupported_alg_test() ->
@@ -130,15 +130,15 @@ unsupported_alg_test() ->
 to_map_test() ->
     Claims = claims(),
     JWT = erljwt:create(none, Claims, 10, undefined),
-    Result = erljwt:to_map(JWT),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:to_map(JWT),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 exp_test() ->
     application:set_env(erljwt, add_iat, true),
     Claims = claims(),
     JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 exp_fail_test() ->
@@ -146,21 +146,21 @@ exp_fail_test() ->
     Now = erlang:system_time(seconds),
     Claims = maps:merge(#{exp=> (Now -1)}, claims()),
     JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
-    expired = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
+    {error, expired} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 iat_fail_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
     Claims = maps:merge(#{iat => (Now + 10)}, claims()),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
-    not_issued_in_past = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
+    {error, not_issued_in_past} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 iat_test() ->
     application:set_env(erljwt, add_iat, true),
     Claims = claims(),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
     timer:sleep(2000),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 nbf_fail_test() ->
@@ -168,7 +168,7 @@ nbf_fail_test() ->
     Now = erlang:system_time(seconds),
     Claims = maps:merge(#{nbf => (Now + 1)}, claims()),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
-    not_yet_valid = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
+    {error, not_yet_valid} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 nbf_test() ->
     application:set_env(erljwt, add_iat, true),
@@ -176,7 +176,7 @@ nbf_test() ->
     Claims = maps:merge(#{nbf => (Now + 1)}, claims()),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
     timer:sleep(2000),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 
@@ -184,35 +184,35 @@ algo_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
-    Result = erljwt:validate(JWT, [rs256], Claims, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, [rs256], Claims, ?JWS),
     true = valid_claims(Claims, Result).
 
 algo_fail_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(hs256,Claims, 10, ?OCT_JWK),
-    algo_not_allowed = erljwt:check_sig(JWT, [rs256], ?JWS).
+    {error, algo_not_allowed} = erljwt:check_sig(JWT, [rs256], ?JWS).
 
 crit_pass_test() ->
     application:set_env(erljwt, add_iat, true),
     Claims = claims(),
     JWT = erljwt:create(hs256, Claims, #{crit => [iat]}, 10, ?OCT_JWK),
-    Result = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS),
     true = valid_claims(Claims, Result).
 
 crit_fail_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(hs256, Claims, #{crit => [iat]}, 10, ?OCT_JWK),
-    not_issued_in_past = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS).
+    {error, not_issued_in_past} = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS).
 
 crit_official_fail_test() ->
     JWT = <<"eyJhbGciOiJub25lIiwNCiAiY3JpdCI6WyJodHRwOi8vZXhhbXBsZS5jb20vVU5ERUZJTkVEIl0sDQogImh0dHA6Ly9leGFtcGxlLmNvbS9VTkRFRklORUQiOnRydWUNCn0.eyJhdWQiOiJzb21lb25lIiwiYXpwIjoidGhlc2FtZW9uZSIsImlzcyI6Im1lIiwibm9uY2UiOiJXd2lUR09WTkNTVG42dFhGcDhpV193c3VnQXAxQUdtLTgxVko5bjRveTdCYXVxMHhUS2ciLCJzdWIiOiI3ODkwNDkifQ.">>,
-    {invalid_claims, _} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
+    {error, {invalid_claims, _}} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 
 garbage_test() ->
-    invalid = erljwt:validate(<<"abc">>, erljwt:algorithms(), #{}, #{keys => []}),
+    {error, no_jwt} = erljwt:validate(<<"abc">>, erljwt:algorithms(), #{}, #{keys => []}),
     ok.
 
 claims() ->
