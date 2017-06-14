@@ -51,9 +51,7 @@ filter_curve([#{crv := <<"P-521">>} = Key | Tail ], List, Algo)
   when Algo == es512->
     filter_curve(Tail, [Key | List], Algo);
 filter_curve([_ | Tail ], List, Algo) ->
-    filter_curve(Tail, List, Algo);
-filter_curve(Key, List, Algo) when is_map(Key) ->
-    filter_curve([Key], List, Algo).
+    filter_curve(Tail, List, Algo).
 
 
 filter_key(_, [], Keys, _Type) ->
