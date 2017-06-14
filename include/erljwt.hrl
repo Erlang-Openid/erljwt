@@ -4,9 +4,11 @@
 -type algo_list() :: [algorithm()].
 
 -type jwt() :: binary().
--type key() :: #{kty := _}.
+-type key() :: #{kty := binary(), crv => binary(), x => binary(), y => binary(),
+                 d => binary(), e => binary(), k => binary(), n => binary()
+                }.
 -type keyid() :: binary().
--type keys() :: #{keys := _} | key() | [key()].
+-type keys() :: #{keys := [key()]} | key() | [key()].
 -type header() :: map().
 -type claims() :: map().
 -type exp_seconds() :: integer() | undefined.
