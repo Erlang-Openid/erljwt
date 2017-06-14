@@ -2,7 +2,9 @@
 -include_lib("public_key/include/public_key.hrl").
 
 
--export([verify/4, create/3]).
+-export([verify/4, create/3,
+         algo_to_atom/1,
+         algo_to_binary/1]).
 
 -define(ALGO_MAPPING, [
                        { none, <<"none">> , none, undefined},
@@ -16,6 +18,12 @@
                        { hs384, <<"HS384">>, sha384, undefined },
                        { hs512, <<"HS512">>, sha512, undefined }
                       ]).
+
+algo_to_atom(Name) ->
+    handle_find_result(lists:keyfind(Name, 2, ?ALGO_MAPPING), 1).
+
+algo_to_binary(Atom) ->
+    handle_find_result(lists:keyfind(Atom, 1, ?ALGO_MAPPING), 2).
 
 verify(EncSignature, Algo, Payload,
                     #{kty := <<"RSA">>, n := N, e:= E})
