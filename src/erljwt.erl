@@ -10,17 +10,17 @@
 -export([check_sig/3]).
 -export([validate/4]).
 -export([to_map/1]).
--export([create/3, create/4]).
+-export([create/3, create/4, create/5]).
 -export([algorithms/0]).
 
--define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256, rs384, rs512]).
-                    %% es256, es384, es512]).
+-define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256, rs384, rs512,
+                    es256, es384, es512]).
 
 
 algorithms() ->
     ?ALL_ALGOS.
 
-check_sig(Jwt,AllowedAlgos, Key) ->
+check_sig(Jwt, AllowedAlgos, Key) ->
     validate(Jwt, AllowedAlgos, #{}, Key).
 
 validate(Jwt, AllowedAlgos, ExpClaims, KeyList)
@@ -35,16 +35,21 @@ to_map(Jwt) ->
     maps:with([header, claims, signature], jwt_to_map(Jwt)).
 
 create(Alg, ClaimSetMap, Key) when is_map(ClaimSetMap) ->
-    create(Alg, ClaimSetMap, undefined, Key).
+    create(Alg, ClaimSetMap, #{}, undefined, Key).
 
-create(Alg, ClaimSetMap, ExpirationSeconds, Key) when is_map(ClaimSetMap) ->
+create(Alg, ClaimSetMap, ExpirationSeconds, Key) ->
+    create(Alg, ClaimSetMap, #{}, ExpirationSeconds, Key).
+
+create(Alg, ClaimSetMap, HeaderMapIn, ExpirationSeconds, Key)
+  when is_map(ClaimSetMap), is_map(HeaderMapIn) ->
     NeedsIat = not maps:is_key(iat, ClaimSetMap),
     AddIat = application:get_env(erljwt, add_iat, true) and NeedsIat,
     ClaimSetExpMap = jwt_add_claims(AddIat, ExpirationSeconds, ClaimSetMap),
-        ClaimSet = base64url:encode(jsone:encode(ClaimSetExpMap)),
-        Header = base64url:encode(jsone:encode(jwt_header(Alg))),
-        Payload = <<Header/binary, ".", ClaimSet/binary>>,
-        return_signed_jwt(Alg, Payload, Key).
+    ClaimSet = base64url:encode(jsone:encode(ClaimSetExpMap)),
+    HeaderMap = maps:merge(HeaderMapIn, jwt_header(Alg)),
+    Header = base64url:encode(jsone:encode(HeaderMap)),
+    Payload = <<Header/binary, ".", ClaimSet/binary>>,
+    return_signed_jwt(Alg, Payload, Key).
 
 
 %% ========================================================================
@@ -56,19 +61,15 @@ jwt_to_map(Jwt) ->
 
 validate_jwt(#{ header := Header, claims := Claims} = Jwt, Algos, ExpClaims,
              KeyList) ->
-    Algo = algo_to_atom(maps:get(alg, Header, undefined)),
+    Algo = erljwt_sig:algo_to_atom(maps:get(alg, Header, undefined)),
     ValidAlgo = lists:member(Algo, Algos),
     KeyId = maps:get(kid, Header, undefined),
     ValidSignature = validate_signature(ValidAlgo, Algo, KeyId, Jwt, KeyList),
-    ExpiresAt  = maps:get(exp, Claims, undefined),
-    NotBefore  = maps:get(nbf, Claims, undefined),
-    IssuedAt  = maps:get(iat, Claims, undefined),
-    StillValid = still_valid(ExpiresAt),
-    AlreadyValid = already_valid(NotBefore),
-    IssuedInPast = already_valid(IssuedAt),
-    InvalidClaims = validate_claims(Claims, maps:to_list(ExpClaims), []),
-    return_validation_result(ValidSignature, StillValid, AlreadyValid,
-                             IssuedInPast, InvalidClaims, Jwt);
+    CriticalClaims = convert_to_atoms(maps:get(crit, Header, [])),
+    EnforceChecks = [{exp, undefined}, {nbf, undefined}, {iat, undefined}],
+    CheckClaims = maps:to_list(ExpClaims) ++ EnforceChecks,
+    InvalidClaims = validate_claims(Claims, CheckClaims, CriticalClaims, []),
+    return_validation_result(ValidSignature, InvalidClaims, Jwt);
 validate_jwt(_, _, _, _) ->
     invalid.
 
@@ -82,20 +83,35 @@ validate_signature(false, _, _, _, _) ->
 validate_signature(_, _, _, _, _) ->
     false.
 
-validate_claims(_, [], InvalidClaims) ->
-    InvalidClaims;
-validate_claims(Claims, [{Key, Value} | Tail], InvalidClaims) ->
+validate_claims(_, [], CriticalClaims, InvalidClaims) ->
+    InvalidClaims ++ CriticalClaims;
+validate_claims(Claims, [{Key, Value} | Tail], CritClaims, InvalidClaims) ->
     AKey = erljwt_util:try_to_atom(Key),
     ClaimValue = maps:get(AKey, Claims, undefined),
-    NewInvalidClaims = validate_claim(AKey, Value, ClaimValue, InvalidClaims),
-    validate_claims(Claims, Tail, NewInvalidClaims).
+    IsCritial = lists:member(Key, CritClaims),
+    NewInvalidClaims = validate_claim(AKey, Value, ClaimValue, IsCritial,
+                                      InvalidClaims),
+    NewCritClaims = lists:delete(Key, CritClaims),
+    validate_claims(Claims, Tail, NewCritClaims, NewInvalidClaims).
 
-validate_claim(_Key, Value, Value, InvalidClaims) ->
-    InvalidClaims;
-validate_claim(aud, ListOfAud, Aud, InvalidClaims) when is_list(ListOfAud) ->
+validate_claim(aud, ListOfAud, Aud, _, InvalidClaims) when is_list(ListOfAud) ->
     Member = lists:is_member(Aud, ListOfAud),
     add_key_if_false(Member, aud, InvalidClaims);
-validate_claim(Key, _, _, InvalidClaims) ->
+validate_claim(exp, undefined, undefined, true, InvalidClaims) ->
+    [exp | InvalidClaims ];
+validate_claim(exp, undefined, Exp, _, InvalidClaims) ->
+    add_key_if_false(still_valid(Exp), exp, InvalidClaims);
+validate_claim(nbf, undefined, undefined, true, InvalidClaims) ->
+    [nbf | InvalidClaims];
+validate_claim(nbf, undefined, Nbf, _, InvalidClaims) ->
+    add_key_if_false(already_valid(Nbf), nbf, InvalidClaims);
+validate_claim(iat, undefined, undefined, true, InvalidClaims) ->
+    [ iat | InvalidClaims ];
+validate_claim(iat, undefined, Iat, _, InvalidClaims) ->
+    add_key_if_false(already_valid(Iat), iat, InvalidClaims);
+validate_claim(_Key, Value, Value, _, InvalidClaims) ->
+    InvalidClaims;
+validate_claim(Key, _, _, _, InvalidClaims) ->
     [ Key | InvalidClaims].
 
 add_key_if_false(false, Key, InvalidClaims) ->
@@ -103,56 +119,27 @@ add_key_if_false(false, Key, InvalidClaims) ->
 add_key_if_false(_, _Key, InvalidClaims) ->
     InvalidClaims.
 
-
-return_validation_result(true, true, true, true, [], Jwt) ->
+return_validation_result(true, [], Jwt) ->
     maps:with([header, claims, signature], Jwt);
-return_validation_result(false, _, _, _, _, _) ->
+return_validation_result(false, _, _) ->
     invalid;
-return_validation_result(true, false, _, _, _, _) ->
-    expired;
-return_validation_result(true, _, false, _, _, _) ->
-    not_yet_valid;
-return_validation_result(true, _, _, false, _, _) ->
-    not_issued_in_past;
-return_validation_result(true, _, _, _, InvalidClaims, _)
-  when InvalidClaims /= [] ->
-    {invalid_claims, InvalidClaims};
-return_validation_result(Error, _, _, _, [], _) ->
+return_validation_result(true, List, _Jwt) ->
+    Expired = lists:member(exp, List),
+    NotYetValid = lists:member(nbf, List),
+    IssuedInFuture = lists:member(iat, List),
+    return_validation_error(Expired, NotYetValid, IssuedInFuture, List);
+return_validation_result(Error, _, _) when is_atom(Error) ->
     Error.
 
-
-%% jwt_check_signature(EncSignature, Algo, Payload,
-%%                     #{kty := <<"RSA">>, n := N, e:= E})
-%%   when Algo == rs256; Algo == rs384; Algo == rs512->
-%%     Signature = erljwt_util:safe_base64_decode(EncSignature),
-%%     Hash = algo_to_hash(Algo),
-%%     crypto:verify(rsa, Hash, Payload, Signature,
-%%                   [erljwt_util:base64_to_unsiged(E),
-%%                    erljwt_util:base64_to_unsiged(N)]);
-%% jwt_check_signature(EncSignature, Algo, Payload,
-%%                     #{kty := <<"EC">>, x := X0, y := Y0})
-%%   when Algo == es256; Algo == es384; Algo == es512->
-%%     Signature = erljwt_util:safe_base64_decode(EncSignature),
-%%     X = erljwt_util:safe_base64_decode(X0),
-%%     Y = erljwt_util:safe_base64_decode(Y0),
-%%     Key = <<4:8, X/binary, Y/binary >>,
-%%     Curve = algo_to_curve(Algo),
-%%     {R, S} = ec_get_r_s(Signature, Algo),
-%%     SigValue = #'ECDSA-Sig-Value'{r = binary:decode_unsigned(R),
-%%                                   s = binary:decode_unsigned(S)},
-%%     Asn1Sig = public_key:der_encode('ECDSA-Sig-Value', SigValue),
-%%     crypto:verify(ecdsa, algo_to_hash(Algo), Payload, Asn1Sig, [Key, Curve]);
-%% jwt_check_signature(Signature, Algo, Payload, SharedKey)
-%%   when Algo == hs256; Algo == hs384; Algo == hs512 ->
-%%     Signature =:= jwt_sign(Algo, Payload, SharedKey);
-%% jwt_check_signature(Signature, none, _Payload, _Key) ->
-%%     Signature =:= <<"">>;
-%% jwt_check_signature(_Signature, _Algo, _Payload, Error) when is_atom(Error) ->
-%%     Error;
-%% jwt_check_signature(_Signature, _Algo, _Payload, _Key) ->
-%%     invalid.
-
-
+return_validation_error(true, _, _, _) ->
+    expired;
+return_validation_error(false, true, _, _) ->
+    not_yet_valid;
+return_validation_error(false, false, true, _) ->
+    not_issued_in_past;
+return_validation_error(false, false, false, InvalidClaims)
+  when InvalidClaims /= [] ->
+    {invalid_claims, InvalidClaims}.
 
 
 still_valid(undefined) ->
@@ -194,7 +181,11 @@ create_jwt_map(HeaderMap, ClaimSetMap, Signature, Payload)
 create_jwt_map(_, _, _, _) ->
     invalid.
 
-
+convert_to_atoms(ListIn) ->
+    ToAtom = fun(B, List) ->
+                     [ erljwt_util:try_to_atom(B) | List]
+             end,
+    lists:foldl(ToAtom, [], ListIn).
 
 
 jwt_add_claims(false, undefined, ClaimsMap) ->
@@ -219,32 +210,8 @@ handle_signature(Error, _) when is_atom(Error) ->
 
 
 jwt_header(Algo) ->
-    create_header(algo_to_binary(Algo)).
+    create_header(erljwt_sig:algo_to_binary(Algo)).
 create_header(Algo) when is_binary(Algo) ->
     #{ alg => Algo, typ => <<"JWT">>};
 create_header(_) ->
     #{ typ => <<"JWT">>}.
-
--define(ALGO_MAPPING, [
-                       { none, <<"none">> , none, undefined},
-                       { rs256, <<"RS256">>, sha256, undefined },
-                       { rs384, <<"RS384">>, sha384, undefined },
-                       { rs512, <<"RS512">>, sha512, undefined },
-                       { es256, <<"ES256">>, sha256, secp256r1 },
-                       { es384, <<"ES384">>, sha384, secp384r1 },
-                       { es512, <<"ES512">>, sha512, secp521r1 },
-                       { hs256, <<"HS256">>, sha256, undefined },
-                       { hs384, <<"HS384">>, sha384, undefined },
-                       { hs512, <<"HS512">>, sha512, undefined }
-                      ]).
-
-algo_to_atom(Name) ->
-    handle_find_result(lists:keyfind(Name, 2, ?ALGO_MAPPING), 1).
-
-algo_to_binary(Atom) ->
-    handle_find_result(lists:keyfind(Atom, 1, ?ALGO_MAPPING), 2).
-
-handle_find_result(false, _) ->
-    unknown;
-handle_find_result(Term, Index) ->
-    element(Index, Term).
