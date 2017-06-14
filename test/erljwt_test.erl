@@ -106,12 +106,6 @@ es256_roundtrip_test() ->
     true = valid_claims(Claims, Result).
 
 es384_roundtrip_test() ->
-    %% {PubKey, PrivKey} = crypto:generate_key(ecdh, secp384r1),
-    %% Bits = 4* (byte_size(PubKey) - 1),
-    %% << 4:8, X:Bits, Y:Bits >> = PubKey,
-    %% Key = #{ crv => <<"P-384">>, x => base64url:encode(binary:encode_unsigned(X)),
-    %%          y => base64url:encode(binary:encode_unsigned(Y)), d => base64url:encode(PrivKey)},
-    %% io:format("key: ~p~n", [Key]),
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(es384, Claims, 10, ?ES384_JWK),
@@ -211,6 +205,11 @@ crit_fail_test() ->
     Claims = claims(),
     JWT = erljwt:create(hs256, Claims, #{crit => [iat]}, 10, ?OCT_JWK),
     not_issued_in_past = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS).
+
+crit_official_fail_test() ->
+    JWT = <<"eyJhbGciOiJub25lIiwNCiAiY3JpdCI6WyJodHRwOi8vZXhhbXBsZS5jb20vVU5ERUZJTkVEIl0sDQogImh0dHA6Ly9leGFtcGxlLmNvbS9VTkRFRklORUQiOnRydWUNCn0.eyJhdWQiOiJzb21lb25lIiwiYXpwIjoidGhlc2FtZW9uZSIsImlzcyI6Im1lIiwibm9uY2UiOiJXd2lUR09WTkNTVG42dFhGcDhpV193c3VnQXAxQUdtLTgxVko5bjRveTdCYXVxMHhUS2ciLCJzdWIiOiI3ODkwNDkifQ.">>,
+    {invalid_claims, _} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
+
 
 garbage_test() ->
     invalid = erljwt:validate(<<"abc">>, erljwt:algorithms(), #{}, #{keys => []}),
