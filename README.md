@@ -5,7 +5,7 @@ JWT is a simple authorization token [RFC7519](https://www.rfc-editor.org/rfc/rfc
 
 erljwt uses the jsone library for json parsing.
 
-supported algorithm
+supported algorithm (the atom to use)
  - none (none)
  - RS256 (rs256)
  - RS384 (rs384)
@@ -45,6 +45,7 @@ In Erlang shell:
 You get back the original claims ,plus expiration claim and the header and signature:
 
 ```
+{ok,
     #{ claims =>
         #{<<"exp">> => 1392607527,
           <<"user_id">> => <<"bob123">>,
@@ -53,4 +54,5 @@ You get back the original claims ,plus expiration claim and the header and signa
        header => #{...},
        signature => <<"lnmmaen....">>
     }
+}
 ```
