@@ -6,20 +6,16 @@ JWT is a simple authorization token [RFC7519](https://www.rfc-editor.org/rfc/rfc
 erljwt uses the jsone library for json parsing.
 
 supported algorithm
- - none
- - RS256
- - RS384
- - RS512
- - HS256
- - HS384
- - HS512
-
-## Recomandation
-Please use the parse/3 funktion whith the second parameter being the list of allowed algorithms.
-```
-% allow only rs256 algorithm
-erljwt:parse(Jwt, [rs256], PublicKeys)
-```
+ - none (none)
+ - RS256 (rs256)
+ - RS384 (rs384)
+ - RS512 (rs512)
+ - HS256 (hs256)
+ - HS384 (hs384)
+ - HS512 (hs512)
+ - ES256 (es256)
+ - ES384 (es384)
+ - ES512 (es512)
 
 ## Smoke test example
 
@@ -42,11 +38,11 @@ In Erlang shell:
     ExpirationSeconds = 86400,
     Token = erljwt:create(hs256, Claims, ExpirationSeconds, Key).
 
-    %% Parse JWT token
-    erljwt:parse(Token, Key).
+    %% validate JWT token
+    erljwt:validate(Token, [hs256], #{}, Key).
 ```
 
-You should get back the original claims ,plus expiration claim and the header and signature:
+You get back the original claims ,plus expiration claim and the header and signature:
 
 ```
     #{ claims =>

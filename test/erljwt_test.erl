@@ -1,23 +1,47 @@
 -module(erljwt_test).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("public_key/include/public_key.hrl").
 
--define(RSA_PUBLIC_KEY,{'RSAPublicKey', 26764034142824704671470727133910664843434961952272064166426226039805773031712563508339384620585192869091085197093344386232207542619708787421377966896296841271368128705832667137731759368836398793992412062213039259549646668413294499661784015754202306959856976300366659103241590400757099670805804654764282426982148086034348017908262389651476327142185608358813461989019448157613779262598416478574844583047253739496922447827706849259886451307152776609476861777213322863455948194927465841543344937499194416674011076061250124513400818349182398008202094247204740240584520318269147256825860139612842332966614539793342302993867, 65537}).
+-define(OCT_JWK, #{ kty => <<"oct">>, k => <<"my secret key">>} ).
 
--define(RSA_PRIVATE_KEY,{'RSAPrivateKey','two-prime',
-                     26764034142824704671470727133910664843434961952272064166426226039805773031712563508339384620585192869091085197093344386232207542619708787421377966896296841271368128705832667137731759368836398793992412062213039259549646668413294499661784015754202306959856976300366659103241590400757099670805804654764282426982148086034348017908262389651476327142185608358813461989019448157613779262598416478574844583047253739496922447827706849259886451307152776609476861777213322863455948194927465841543344937499194416674011076061250124513400818349182398008202094247204740240584520318269147256825860139612842332966614539793342302993867,
-                     65537,
-                     12794561693313670100205653006781224797363586340001583385478945661643268216176428806876618096082122962427692741885262975428461209855127276346365743059050308024962440641984489088989975449374313353003376259351732914257448923835215476363026888834996387949590598707455138772060958348043394306824326103327356583873848688304161573971837684253713093328415056019518486753353685104889273063916897235433180509399999298673446273215515841603080826297295537431001587831668670650206107678796371102894820869947413565783400511327660856890784768064128415588379491565702377411884622967328023716684228979596814867941892555080877039934913,
-                     175921812047663448018479509235149059234162469604896431741565550421215807198867689136961832929735756392012649052466171066035877581304404480112067613119039884401516991962137582818872105841975489123820547558891955007907269296649095288060806030752931271323412548318651305799213788576544135388323426837173991918523,
-                     152135962171497984267966543913856108347630812566910071974963337510843417419284055362416709755317088206676526904022621662056506919405421710738842624864481880983646685082220280096388715674338529824473346539992718562264652001183670660912857359719070110573506895077317198382716742487416742094479674005148886682929,
-                     7940197446282076983057851111853928577973550591136055130560613060499509554820187443232572467555096623397064496348550193224195887597821512308642385211500678670974979968933624822287008698606336830008410206130924560376424044119932616111263320551248465760938924850490113410044316746409166615479205587444659781421,
-                     84323951750609034263605058328437724273733757518546902734188980805978106073752129499973861816407422205891707581802977430675841339203838192816095615426435514697513859890011011710962053448744176509055866351301333624887673893266350866802867747864492145911204937114661141511698516423629600936600304533882132364273,
-                     146498358518282536624753849370270691372323087909948725666061752883743908775492534384951112165832037025133690750650675527600809535328134914630670173454194925358833883485231412349407499865536427735554260391108738360645045140719276539512627330123338501657698608899096243687786198062042440767530650052735017635902,
-                     asn1_NOVALUE}).
+-define(RSA_JWK, #{ kty => <<"RSA">>,
+                    n => <<"1AMRuJC7Wm2zMl-XaOmoToKqXqZdrYlu0LCdjWKmi3d3gP5vu1zipN65Y0biJp4OqFs8YnuGfeFK4Ye40TszcOt7z7SW9u7nqNKhZskNQYb460oOYuvEXTNJQKSvz_wAtYXgnrvMgP7Mf4ujO5nViEMiKYpkMGeFVaxFUCQhiN7b6OLseTI25sDGGPyBH125Myo1FdoKhonIiYFNkXZC7pKlRm3RFhyVEQGnEezNg4DnvXqZnpPluIN4PiXwi7Ped0VKpNQmdo-3tGmE9jjYirVIGCxhstEKTmaCexL8Li8HuaEOSf6KwaJbOcqI8pEFzECr9hGkI5sJ12Hnua89yw">>,
+                    e => <<"AQAB">>,
+                    d => <<"ZVo6RINcLXS37-Lm3Q6mmTG6BJl_uxAyW62zA_4fJBkulgoMnANhjfOzqJQgVNnGpBFJosLunorvYzWg0tV8WAUbIUZxzQaU1I4s_pgqsCK4KLM0gXG4Y926rR6Ntd4A8MZZhUi-EQS9-lNk6381J3kAgd9Y2hMDGNvMHu3G4kjYfsWq-KboZmJG8k4DnEPwxOC-6hgcXUXXxQTkymrlLqY7cty9nN4QICLXFij3KFDJqft87XCPwJ4yPKpfTJEdO5LVmUQ11C0lfpPoND3_F2yd3yXmyIJfUj-_1gSjvvL2VMLUOzwAU8XcSqrMIpFs2YjNkxtnYok0yBS5ZyPdwQ">>
+                  }).
+
+-define(ES256_JWK, #{ kty => <<"EC">>, crv => <<"P-256">>,
+                      x => <<"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU">>,
+                      y => <<"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a1">>,
+                      d => <<"jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI">>
+                    }).
+
+-define(ES384_JWK, #{ kty => <<"EC">>, crv => <<"P-384">>,
+                      x => <<"kp3m6F7Zo349rSH2bUNSY86bGSGWzDOH-TUhklgTehJC1HnhHw7aRWZEYDQr93dY">>,
+                      y => <<"bxgu3eepDWqg0HmpelIUWwbZS8ULD3CQBiOlcmJEW_dltj6VVgu-hXyv0FbDdw_H">>,
+                      d => <<"c123iprPrEesbmTdtb2pR82vU2GBTlKWrcofXHzOmHeEP5ic8vy0q8bMCchoyZ9U">>
+                    }).
+
+-define(ES512_JWK, #{ kty => <<"EC">>, crv => <<"P-521">>,
+                      x => <<"AekpBQ8ST8a8VcfVOTNl353vSrDCLLJXmPk06wTjxrrjcBpXp5EOnYG_NjFZ6OvLFV1jSfS9tsz4qUxcWceqwQGk">>,
+                      y => <<"ADSmRA43Z1DSNx_RvcLI87cdL07l6jQyyBXMoxVg_l2Th-x3S1WDhjDly79ajL4Kkd0AZMaZmh9ubmf63e3kyMj2">>,
+                      d => <<"AY5pb7A0UFiB3RELSD64fTLOSV_jazdF7fLYyuTw8lOfRhWg6Y6rUrPAxerEzgdRhajnu0ferB0d53vM9mE15j2C">>
+                    }).
+
+-define(JWS, #{keys => [?RSA_JWK, ?OCT_JWK, ?ES256_JWK, ?ES384_JWK, ?ES512_JWK]}).
+
+
 
 rs256_verification_test() ->
     IdToken =
     <<"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE0NjA2MzE4MjEsImlzcyI6Imh0dHBzOi8vcHJvdG9uLnNjYy5raXQuZWR1Iiwic3ViIjoiam9lIiwiYXVkIjoiMTIzIiwiaWF0IjoxNDYwNjMxNTIxLCJhdXRoX3RpbWUiOjE0NjA2MzE1MjF9.nUKMCw_ppksTD49qWR7hs_FTNnVu2qaohnh67jANI9Cje7gaFi2puIsXbC_i0HoFnppR5mA_3B20f7X8O3UF3ZrgYyfjjAq5U3HeZ-Tx6xEd2EcJ-gfpVnoAJPa46Lx77NmApUyTAazXj8kjzgkh58_QDxujG13g55ckRG9qJfK3bX_h0ec07ARJWQSg_Zh8Q3lFB_iIbSDXOYegSAHhIpTxmuTA-qmPn3ySGIRirQt_-niek0-wyy5PAsxSU9lc42QIG7qdMLhvXsq5j52kPO9DA3vJNpGTloJ8H1AoE-ES8HpXH3RhRMe3cdiVyK2vTsPbRc0-GxkRZMKaocyOPQ">>,
-    expired = erljwt:parse(IdToken,?RSA_PUBLIC_KEY),
+    {error, expired} = erljwt:check_sig(IdToken, [rs256], ?JWS),
+    ok.
+
+es256_verification_test() ->
+    JWT = <<"eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ.DtEhU3ljbEg8L38VWAfUAqOyKAM6-Xx-F4GawxaepmXFCgfTjDxw5djxLa8ISlSApmWQxfKTUJqPP3-Kg6NU1Q">>,
+    io:format("~p~n", [erljwt:to_map(JWT)]),
+    {error, expired} = erljwt:validate(JWT, [es256], #{},  ?JWS),
     ok.
 
 
@@ -25,112 +49,205 @@ none_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
     JWT = erljwt:create(none, Claims, 10, undefined),
-    Result = erljwt:parse(JWT,undefined),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 hs256_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
-    Key = <<"my secret key">>,
-    JWT = erljwt:create(hs256,Claims, 10, Key),
-    Result = erljwt:parse(JWT,Key),
+    JWT = erljwt:create(hs256,Claims, 10, ?OCT_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 hs384_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
-    Key = <<"my secret key">>,
-    JWT = erljwt:create(hs384,Claims, 10, Key),
-    Result = erljwt:parse(JWT,Key),
+    JWT = erljwt:create(hs384,Claims, 10, ?OCT_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 hs512_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
-    Key = <<"my secret key">>,
-    JWT = erljwt:create(hs512,Claims, 10, Key),
-    Result = erljwt:parse(JWT,Key),
+    JWT = erljwt:create(hs512,Claims, 10, ?OCT_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 rs256_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
-    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
-    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 rs384_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
-    JWT = erljwt:create(rs384, Claims, 10, ?RSA_PRIVATE_KEY),
-    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    JWT = erljwt:create(rs384, Claims, 10, ?RSA_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 rs512_roundtrip_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
-    JWT = erljwt:create(rs512, Claims, 10, ?RSA_PRIVATE_KEY),
-    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    JWT = erljwt:create(rs512, Claims, 10, ?RSA_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
+    true = valid_claims(Claims, Result).
+
+es256_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(es256, Claims, 10, ?ES256_JWK),
+    {ok, Map} = erljwt:to_map(JWT),
+    Sig = maps:get(signature, Map),
+    io:format("created jwt: ~p~n", [Map]),
+    io:format("signature length: ~p~n", [byte_size(base64url:decode(Sig))]),
+    {ok, Result} = erljwt:validate(JWT, [es256], #{}, ?JWS),
+    true = valid_claims(Claims, Result).
+
+es384_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(es384, Claims, 10, ?ES384_JWK),
+    io:format("created jwt: ~p~n", [erljwt:to_map(JWT)]),
+    {ok, Result} = erljwt:validate(JWT, [es384], #{}, ?JWS),
+    true = valid_claims(Claims, Result).
+
+es512_roundtrip_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(es512, Claims, 10, ?ES512_JWK),
+    io:format("created jwt: ~p~n", [erljwt:to_map(JWT)]),
+    {ok, Result} = erljwt:validate(JWT, [es512], #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 unsupported_alg_test() ->
     application:set_env(erljwt, add_iat, false),
     Claims = claims(),
-    Key = <<"my secret key">>,
-    alg_not_supported = erljwt:create(xy21,Claims, 10, Key),
+    alg_not_supported = erljwt:create(xy21,Claims, 10, ?OCT_JWK),
     application:unset_env(erljwt, add_iat).
 
 to_map_test() ->
     Claims = claims(),
     JWT = erljwt:create(none, Claims, 10, undefined),
-    Result = erljwt:to_map(JWT),
-    Result = erljwt:parse(JWT,undefined),
+    {ok, Result} = erljwt:to_map(JWT),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
+
+
+aud_text_test() ->
+    Claims = maps:merge(#{aud => <<"me">>}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}
+                                  , ?JWS),
+    true = valid_claims(Claims, Result).
+
+aud_text_fail_test() ->
+    Claims = maps:merge(#{aud => <<"other">>}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {error, {invalid_claims, [aud]}} =
+        erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}, ?JWS).
+
+aud_list_test() ->
+    Claims = maps:merge(#{aud => [<<"me">>, <<"other">>, <<"else">>]}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    io:format("jwt: ~n~p~n~n", [erljwt:to_map(JWT)]),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}
+                                  , ?JWS),
+    true = valid_claims(Claims, Result).
+
+aud_list_fail_test() ->
+    Claims = maps:merge(#{aud => [<<"other">>, <<"else">>]}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {error, {invalid_claims, [aud]}} =
+        erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}, ?JWS).
 
 exp_test() ->
     application:set_env(erljwt, add_iat, true),
     Claims = claims(),
-    JWT = erljwt:create(rs256, Claims, ?RSA_PRIVATE_KEY),
-    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 exp_fail_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
     Claims = maps:merge(#{exp=> (Now -1)}, claims()),
-    JWT = erljwt:create(rs256, Claims, ?RSA_PRIVATE_KEY),
-    expired = erljwt:parse(JWT,?RSA_PUBLIC_KEY).
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {error, expired} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 iat_fail_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
     Claims = maps:merge(#{iat => (Now + 10)}, claims()),
-    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
-    not_issued_in_past = erljwt:parse(JWT,?RSA_PUBLIC_KEY).
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
+    {error, not_issued_in_past} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 iat_test() ->
     application:set_env(erljwt, add_iat, true),
     Claims = claims(),
-    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
     timer:sleep(2000),
-    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
 nbf_fail_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
     Claims = maps:merge(#{nbf => (Now + 1)}, claims()),
-    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
-    not_yet_valid = erljwt:parse(JWT,?RSA_PUBLIC_KEY).
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
+    {error, not_yet_valid} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 nbf_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
     Claims = maps:merge(#{nbf => (Now + 1)}, claims()),
-    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
     timer:sleep(2000),
-    Result = erljwt:parse(JWT,?RSA_PUBLIC_KEY),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
+
+
+algo_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
+    {ok, Result} = erljwt:validate(JWT, [rs256], Claims, ?JWS),
+    true = valid_claims(Claims, Result).
+
+algo_fail_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(hs256,Claims, 10, ?OCT_JWK),
+    {error, algo_not_allowed} = erljwt:check_sig(JWT, [rs256], ?JWS).
+
+crit_pass_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Claims = claims(),
+    JWT = erljwt:create(hs256, Claims, #{crit => [iat]}, 10, ?OCT_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS),
+    true = valid_claims(Claims, Result).
+
+crit_fail_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(hs256, Claims, #{crit => [iat]}, 10, ?OCT_JWK),
+    {error, not_issued_in_past} = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS).
+
+crit_official_fail_test() ->
+    JWT = <<"eyJhbGciOiJub25lIiwNCiAiY3JpdCI6WyJodHRwOi8vZXhhbXBsZS5jb20vVU5ERUZJTkVEIl0sDQogImh0dHA6Ly9leGFtcGxlLmNvbS9VTkRFRklORUQiOnRydWUNCn0.eyJhdWQiOiJzb21lb25lIiwiYXpwIjoidGhlc2FtZW9uZSIsImlzcyI6Im1lIiwibm9uY2UiOiJXd2lUR09WTkNTVG42dFhGcDhpV193c3VnQXAxQUdtLTgxVko5bjRveTdCYXVxMHhUS2ciLCJzdWIiOiI3ODkwNDkifQ.">>,
+    {error, {invalid_claims, _}} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
+
+
+garbage_test() ->
+    {error, no_jwt} = erljwt:validate(<<"abc">>, erljwt:algorithms(), #{}, #{keys => []}),
+    ok.
+
+claims() ->
+    #{iss => <<"me">>,
+      sub => <<"789049">>,
+      azp => <<"thesameone">>,
+      nonce => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>}.
 
 valid_claims(OrgClaims, #{claims := ExtClaims}) when is_map(ExtClaims) ->
     io:format("org claims: ~p~n~next claims: ~p~n~n", [OrgClaims, ExtClaims]),
@@ -146,31 +263,6 @@ valid_claims(OrgClaims, Result)  ->
     application:unset_env(erljwt, add_iat),
     false.
 
-algo_test() ->
-    application:set_env(erljwt, add_iat, false),
-    Claims = claims(),
-    JWT = erljwt:create(rs256, Claims, 10, ?RSA_PRIVATE_KEY),
-    Result = erljwt:parse(JWT, [rs256], ?RSA_PUBLIC_KEY),
-    true = valid_claims(Claims, Result).
-
-algo_fail_test() ->
-    application:set_env(erljwt, add_iat, false),
-    Claims = claims(),
-    Key = <<"my secret key">>,
-    JWT = erljwt:create(hs256,Claims, 10, Key),
-    algo_not_allowed = erljwt:parse(JWT, [rs256], ?RSA_PUBLIC_KEY).
-
-garbage_test() ->
-    %% JWT = erljwt:create(rs256, claims(), 10, ?RSA_PRIVATE_KEY),
-    invalid = erljwt:parse(<<"abc">>, #{keys => []}),
-    ok.
-
-claims() ->
-    #{iss => <<"me">>,
-      sub => <<"789049">>,
-      <<"aud">> => <<"someone">>,
-      <<"azp">> => <<"thesameone">>,
-      <<"nonce">> => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>}.
 
 add_iat() ->
     application:get_env(erljwt, add_iat, true).
