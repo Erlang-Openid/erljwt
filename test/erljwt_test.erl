@@ -199,6 +199,19 @@ algo_fail_test() ->
     JWT = erljwt:create(hs256,Claims, 10, ?OCT_JWK),
     algo_not_allowed = erljwt:check_sig(JWT, [rs256], ?JWS).
 
+crit_pass_test() ->
+    application:set_env(erljwt, add_iat, true),
+    Claims = claims(),
+    JWT = erljwt:create(hs256, Claims, #{crit => [iat]}, 10, ?OCT_JWK),
+    Result = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS),
+    true = valid_claims(Claims, Result).
+
+crit_fail_test() ->
+    application:set_env(erljwt, add_iat, false),
+    Claims = claims(),
+    JWT = erljwt:create(hs256, Claims, #{crit => [iat]}, 10, ?OCT_JWK),
+    not_issued_in_past = erljwt:validate(JWT, erljwt:algorithms(), Claims, ?JWS).
+
 garbage_test() ->
     invalid = erljwt:validate(<<"abc">>, erljwt:algorithms(), #{}, #{keys => []}),
     ok.
