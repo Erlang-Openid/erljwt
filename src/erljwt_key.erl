@@ -1,8 +1,23 @@
 -module(erljwt_key).
 
--export([get_needed/3]).
+-include("erljwt.hrl").
+
+-export([to_key_list/1, get_needed/3]).
 
 
+-spec to_key_list(keys()) -> [key()].
+to_key_list(Json) when is_binary(Json) ->
+    to_key_list(erljwt_util:safe_jsone_decode(Json));
+to_key_list(#{keys := KeyList}) when is_list(KeyList) ->
+    KeyList;
+to_key_list(#{kty := _} = Key) ->
+    [Key];
+to_key_list(invalid) ->
+    [].
+
+
+
+-spec get_needed(algorithm(), keyid(), [key()]) -> key_result().
 get_needed(Algo, KeyId, KeyList)
   when Algo == hs256; Algo == hs384; Algo == hs512->
     filter_oct_key(KeyId, KeyList);
@@ -13,11 +28,9 @@ get_needed(Algo, KeyId, KeyList)
   when Algo == es256; Algo == es384; Algo == es512 ->
     filter_ec_key(KeyId, Algo, KeyList);
 get_needed(none, _, _) ->
-    <<>>;
+    {ok, <<>>};
 get_needed(_, _, _) ->
-    unknown_algorithm.
-
-
+    {error, unknown_algorithm}.
 
 
 filter_oct_key(KeyId, KeyList) ->
@@ -32,11 +45,11 @@ filter_ec_key(KeyId, Algo, KeyList) ->
 
 
 handle_filter_result([]) ->
-    no_key_found;
+    {error, no_key_found};
 handle_filter_result([Key]) ->
-    Key;
+    {ok, Key};
 handle_filter_result([_ | _ ]) ->
-    too_many_keys.
+    {error, too_many_keys}.
 
 
 filter_curve([], Keys, _) ->

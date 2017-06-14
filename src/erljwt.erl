@@ -5,6 +5,7 @@
 
 -module(erljwt).
 
+-include("erljwt.hrl").
 -include_lib("public_key/include/public_key.hrl").
 
 -export([check_sig/3]).
@@ -15,23 +16,6 @@
 
 -define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256, rs384, rs512,
                     es256, es384, es512]).
-
--type algorithm() :: none | hs256 | hs384 | hs512 | rs256 | rs384 | rs512 |
-                     es256 | es384 | es512.
--type algo_list() :: [algorithm()].
-
--type jwt() :: binary().
--type key() :: #{kty := _}.
--type keys() :: #{keys := _} | key() | [key()] | binary().
--type header() :: map().
--type claims() :: map().
--type exp_seconds() :: integer() | undefined.
--type exp_claims() :: claims().
--type error_res() :: {error, atom()} |
-                     {error, {invalid_claims, [ atom() | binary() ]}}.
--type jwt_result() :: {ok, #{ header := _, claims := _, signatrue := _}}
-                | error_res().
-
 
 -spec algorithms() -> algo_list().
 algorithms() ->
@@ -101,11 +85,19 @@ validate_signature(true, Algorithm, KeyId, #{signature := Signature,
                                              payload := Payload}, KeyList)
   when is_atom(Algorithm) ->
     Key = erljwt_key:get_needed(Algorithm, KeyId, KeyList),
-    erljwt_sig:verify(Signature, Algorithm, Payload, Key);
+    verify_if_key(Key, Signature, Algorithm, Payload);
 validate_signature(false, _, _, _, _) ->
     algo_not_allowed;
 validate_signature(_, _, _, _, _) ->
     false.
+
+verify_if_key({ok, Key}, Signature, Algorithm, Payload) ->
+    erljwt_sig:verify(Signature, Algorithm, Payload, Key);
+verify_if_key({error, Reason}, _Signature, _Algorithm, _Payload) ->
+    Reason.
+
+
+
 
 validate_claims(_, [], CriticalClaims, InvalidClaims) ->
     InvalidClaims ++ CriticalClaims;
