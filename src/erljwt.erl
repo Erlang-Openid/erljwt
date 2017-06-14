@@ -95,7 +95,7 @@ validate_claims(Claims, [{Key, Value} | Tail], CritClaims, InvalidClaims) ->
     validate_claims(Claims, Tail, NewCritClaims, NewInvalidClaims).
 
 validate_claim(aud, ListOfAud, Aud, _, InvalidClaims) when is_list(ListOfAud) ->
-    Member = lists:is_member(Aud, ListOfAud),
+    Member = lists:member(Aud, ListOfAud),
     add_key_if_false(Member, aud, InvalidClaims);
 validate_claim(exp, undefined, undefined, true, InvalidClaims) ->
     [exp | InvalidClaims ];
