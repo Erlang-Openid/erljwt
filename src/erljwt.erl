@@ -16,13 +16,33 @@
 -define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256, rs384, rs512,
                     es256, es384, es512]).
 
+-type algorithm() :: none | hs256 | hs384 | hs512 | rs256 | rs384 | rs512 |
+                     es256 | es384 | es512.
+-type algo_list() :: [algorithm()].
 
+-type jwt() :: binary().
+-type key() :: #{kty := _}.
+-type keys() :: #{keys := _} | key() | [key()] | binary().
+-type header() :: map().
+-type claims() :: map().
+-type exp_seconds() :: integer() | undefined.
+-type exp_claims() :: claims().
+-type error_res() :: {error, atom()} |
+                     {error, {invalid_claims, [ atom() | binary() ]}}.
+-type jwt_result() :: {ok, #{ header := _, claims := _, signatrue := _}}
+                | error_res().
+
+
+-spec algorithms() -> algo_list().
 algorithms() ->
     ?ALL_ALGOS.
 
+-spec check_sig(jwt(), algo_list(), keys()) -> jwt_result().
 check_sig(Jwt, AllowedAlgos, Key) ->
     validate(Jwt, AllowedAlgos, #{}, Key).
 
+
+-spec validate(jwt(), algo_list(), exp_claims(), keys()) -> jwt_result().
 validate(Jwt, AllowedAlgos, ExpClaims, KeyList)
   when is_list(KeyList), is_list(AllowedAlgos), is_map(ExpClaims) ->
     validate_jwt(jwt_to_map(Jwt), AllowedAlgos, ExpClaims, KeyList);
@@ -31,15 +51,19 @@ validate(Jwt, AllowedAlgos, Claims, #{keys := KeyList}) ->
 validate(Jwt, AllowedAlgos, Claims, #{kty := _} = Key) ->
     validate(Jwt, AllowedAlgos, Claims, [Key]).
 
+-spec to_map(jwt()) -> jwt_result().
 to_map(Jwt) ->
-    maps:with([header, claims, signature], jwt_to_map(Jwt)).
+    {ok, maps:with([header, claims, signature], jwt_to_map(Jwt))}.
 
+-spec create(algorithm(), claims(), key()) -> jwt().
 create(Alg, ClaimSetMap, Key) when is_map(ClaimSetMap) ->
     create(Alg, ClaimSetMap, #{}, undefined, Key).
 
+-spec create(algorithm(), claims(), exp_seconds(), key()) -> jwt().
 create(Alg, ClaimSetMap, ExpirationSeconds, Key) ->
     create(Alg, ClaimSetMap, #{}, ExpirationSeconds, Key).
 
+-spec create(algorithm(), claims(), header(), exp_seconds(), key()) -> jwt().
 create(Alg, ClaimSetMap, HeaderMapIn, ExpirationSeconds, Key)
   when is_map(ClaimSetMap), is_map(HeaderMapIn) ->
     NeedsIat = not maps:is_key(iat, ClaimSetMap),
@@ -71,7 +95,7 @@ validate_jwt(#{ header := Header, claims := Claims} = Jwt, Algos, ExpClaims,
     InvalidClaims = validate_claims(Claims, CheckClaims, CriticalClaims, []),
     return_validation_result(ValidSignature, InvalidClaims, Jwt);
 validate_jwt(_, _, _, _) ->
-    invalid.
+    {error, no_jwt}.
 
 validate_signature(true, Algorithm, KeyId, #{signature := Signature,
                                              payload := Payload}, KeyList)
@@ -120,24 +144,24 @@ add_key_if_false(_, _Key, InvalidClaims) ->
     InvalidClaims.
 
 return_validation_result(true, [], Jwt) ->
-    maps:with([header, claims, signature], Jwt);
+    {ok, maps:with([header, claims, signature], Jwt)};
 return_validation_result(false, _, _) ->
-    invalid;
+    {error, invalid};
 return_validation_result(true, List, _Jwt) ->
     Expired = lists:member(exp, List),
     NotYetValid = lists:member(nbf, List),
     IssuedInFuture = lists:member(iat, List),
-    return_validation_error(Expired, NotYetValid, IssuedInFuture, List);
+    {error, validation_error(Expired, NotYetValid, IssuedInFuture, List)};
 return_validation_result(Error, _, _) when is_atom(Error) ->
-    Error.
+    {error, Error}.
 
-return_validation_error(true, _, _, _) ->
+validation_error(true, _, _, _) ->
     expired;
-return_validation_error(false, true, _, _) ->
+validation_error(false, true, _, _) ->
     not_yet_valid;
-return_validation_error(false, false, true, _) ->
+validation_error(false, false, true, _) ->
     not_issued_in_past;
-return_validation_error(false, false, false, InvalidClaims)
+validation_error(false, false, false, InvalidClaims)
   when InvalidClaims /= [] ->
     {invalid_claims, InvalidClaims}.
 
