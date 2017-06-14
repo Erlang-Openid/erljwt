@@ -134,6 +134,34 @@ to_map_test() ->
     {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
     true = valid_claims(Claims, Result).
 
+
+aud_text_test() ->
+    Claims = maps:merge(#{aud => <<"me">>}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}
+                                  , ?JWS),
+    true = valid_claims(Claims, Result).
+
+aud_text_fail_test() ->
+    Claims = maps:merge(#{aud => <<"other">>}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {error, {invalid_claims, [aud]}} =
+        erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}, ?JWS).
+
+aud_list_test() ->
+    Claims = maps:merge(#{aud => [<<"me">>, <<"other">>, <<"else">>]}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    io:format("jwt: ~n~p~n~n", [erljwt:to_map(JWT)]),
+    {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}
+                                  , ?JWS),
+    true = valid_claims(Claims, Result).
+
+aud_list_fail_test() ->
+    Claims = maps:merge(#{aud => [<<"other">>, <<"else">>]}, claims()),
+    JWT = erljwt:create(rs256, Claims, ?RSA_JWK),
+    {error, {invalid_claims, [aud]}} =
+        erljwt:validate(JWT, erljwt:algorithms(), #{aud => <<"me">>}, ?JWS).
+
 exp_test() ->
     application:set_env(erljwt, add_iat, true),
     Claims = claims(),
@@ -218,7 +246,6 @@ garbage_test() ->
 claims() ->
     #{iss => <<"me">>,
       sub => <<"789049">>,
-      aud => <<"someone">>,
       azp => <<"thesameone">>,
       nonce => <<"WwiTGOVNCSTn6tXFp8iW_wsugAp1AGm-81VJ9n4oy7Bauq0xTKg">>}.
 
