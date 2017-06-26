@@ -20,3 +20,6 @@ elvis:
 
 compile:
 	$(REBAR) compile
+
+dialyzer:
+	$(REABAR) dialyzer
