@@ -57,6 +57,20 @@ verify(_Signature, _Algo, _Payload, _Key) ->
     invalid.
 
 
+-ifdef(OTP_RELEASE).
+-if(OTP_RELEASE >= 23).
+hmac(Algo, Key, Payload) ->
+    crypto:mac(hmac, algo_to_hash(Algo), convert_key(Key), Payload).
+-else.
+hmac(Algo, Key, Payload) ->
+    crypto:hmac(algo_to_hash(Algo), convert_key(Key), Payload).
+-endif.
+-else.
+hmac(Algo, Key, Payload) ->
+    crypto:hmac(algo_to_hash(Algo), convert_key(Key), Payload).
+-endif.
+
+
 create(Algo, Payload, Key)
   when Algo == rs256; Algo == rs384; Algo == rs512 ->
     base64url:encode(crypto:sign(rsa, algo_to_hash(Algo), Payload,
@@ -70,8 +84,7 @@ create(Algo, Payload, Key)
     base64url:encode(ec_signature(R, S, Algo));
 create(Algo, Payload, Key)
   when Algo == hs256; Algo == hs384; Algo == hs512 ->
-    base64url:encode(crypto:hmac(algo_to_hash(Algo), convert_key(Key),
-                                 Payload));
+    base64url:encode(hmac(Algo, Payload, Key));
 create(none, _Payload, _Key) ->
     <<"">>;
 create(_, _, _) ->
