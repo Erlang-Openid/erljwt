@@ -58,7 +58,7 @@ verify(_Signature, _Algo, _Payload, _Key) ->
 
 
 -ifdef(OTP_RELEASE).
--if(OTP_RELEASE >= 23).
+-if(?OTP_RELEASE >= 23).
 hmac(Algo, Key, Payload) ->
     crypto:mac(hmac, algo_to_hash(Algo), convert_key(Key), Payload).
 -else.
