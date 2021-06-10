@@ -17,7 +17,7 @@ supported algorithm (the atom to use)
  - ES384 (es384)
  - ES512 (es512)
 
-## Smoke test example
+## Minimal Example
 
 Compilation
 ```shell
@@ -25,26 +25,28 @@ Compilation
    make eunit
 ```
 
-In Erlang shell:
-
-```
+In Erlang shell (start using `./rebar3 shell`):
+```erlang
     %% Create JWT token
     application:start(crypto).
-    Key = <<"53F61451CAD6231FDCF6859C6D5B88C1EBD5DC38B9F7EBD990FADD4EB8EB9063">>.
-    Claims = {[
-        {user_id, <<"bob123">>},
-        {user_name, <<"Bob">>}
-    ]}.
-    ExpirationSeconds = 86400,
+    Key = #{
+        kty => <<"oct">>,
+        k => <<"53F61451CAD6231FDCF6859C6D5B88C1EBD5DC38B9F7EBD990FADD4EB8EB9063">>
+    }.
+    Claims = #{
+        user_id => <<"bob123">>,
+        user_name => <<"Bob">>
+    }.
+    ExpirationSeconds = 86400.
     Token = erljwt:create(hs256, Claims, ExpirationSeconds, Key).
 
     %% validate JWT token
     erljwt:validate(Token, [hs256], #{}, Key).
 ```
 
-You get back the original claims ,plus expiration claim and the header and signature:
+You get back the original claims, plus expiration claim and the header and signature:
 
-```
+```erlang
 {ok,
     #{ claims =>
         #{<<"exp">> => 1392607527,
