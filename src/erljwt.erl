@@ -172,7 +172,8 @@ already_valid(undefined) ->
     true;
 already_valid(NotBefore) when is_number(NotBefore) ->
     SecondsPassed = erljwt_util:epoch() - NotBefore,
-    SecondsPassed >= 0;
+    % security standards suggest to accept up to 5 minutes clock skew
+    SecondsPassed >= -?JWT_ALLOWED_CLOCK_SKEW;
 already_valid(_) ->
     false.
 
