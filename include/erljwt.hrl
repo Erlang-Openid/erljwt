@@ -23,7 +23,3 @@
 -type jwt_result() :: {ok, #{ header => _, claims => _, signatrue => _}}
                 | error_res().
 -type key_result() :: {ok, key()} | error_res().
-
-% Allowed clock difference in seconds between server and client when checking
-% the nbf (not yet valid) check.
--define(JWT_ALLOWED_CLOCK_SKEW, 300).

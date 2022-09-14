@@ -181,7 +181,7 @@ exp_fail_test() ->
 iat_fail_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
-    Claims = maps:merge(#{iat => (Now + 10 + ?JWT_ALLOWED_CLOCK_SKEW)}, claims()),
+    Claims = maps:merge(#{iat => (Now + 10 + erljwt:clock_skew())}, claims()),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
     {error, not_issued_in_past} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
@@ -196,14 +196,14 @@ iat_test() ->
 nbf_fail_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
-    Claims = maps:merge(#{nbf => (Now + 1 + ?JWT_ALLOWED_CLOCK_SKEW)}, claims()),
+    Claims = maps:merge(#{nbf => (Now + 1 + erljwt:clock_skew())}, claims()),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
     {error, not_yet_valid} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS).
 
 nbf_test() ->
     application:set_env(erljwt, add_iat, true),
     Now = erlang:system_time(seconds),
-    Claims = maps:merge(#{nbf => (Now + 1 + ?JWT_ALLOWED_CLOCK_SKEW)}, claims()),
+    Claims = maps:merge(#{nbf => (Now + 1 + erljwt:clock_skew())}, claims()),
     JWT = erljwt:create(rs256, Claims, 10, ?RSA_JWK),
     timer:sleep(2000),
     {ok, Result} = erljwt:validate(JWT, erljwt:algorithms(), #{}, ?JWS),
