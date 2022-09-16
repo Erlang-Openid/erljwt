@@ -1,5 +1,6 @@
 Erlang JWT Library
-=
+==================
+
 erljwt is a easy to use json web token [JWT] parsing and minting library.
 JWT is a simple authorization token [RFC7519](https://www.rfc-editor.org/rfc/rfc7519.txt) based on JSON.
 
@@ -58,3 +59,13 @@ You get back the original claims, plus expiration claim and the header and signa
     }
 }
 ```
+
+## Configuration
+
+In checking expiration and not-before timestamps there is an allowed clock difference.
+This fixes the problem that servers might not have synchronized clocks.
+
+Per default the allowed difference is 300 seconds (5 minutes).
+
+This can be changed via the application env key `clock_skew`. The current allowed
+clock skew can be requested with `erljwt:clock_skew()`.

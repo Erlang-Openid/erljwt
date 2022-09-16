@@ -13,9 +13,15 @@
 -export([to_map/1]).
 -export([create/3, create/4, create/5]).
 -export([algorithms/0]).
+-export([clock_skew/0]).
 
 -define(ALL_ALGOS, [none, hs256, hs384, hs512, rs256, rs384, rs512,
                     es256, es384, es512]).
+
+
+% Default allowed clock difference in seconds between server and client
+% when checking the nbf (not yet valid) check.
+-define(JWT_ALLOWED_CLOCK_SKEW, 300).
 
 -spec algorithms() -> algo_list().
 algorithms() ->
@@ -58,6 +64,11 @@ create(Alg, ClaimSetMap, HeaderMapIn, ExpirationSeconds, Key)
     Header = base64url:encode(jsone:encode(HeaderMap)),
     Payload = <<Header/binary, ".", ClaimSet/binary>>,
     return_signed_jwt(Alg, Payload, Key).
+
+%% @doc Allowed clock skew when checking not-valid-before and -after timestamps.
+-spec clock_skew() -> non_neg_integer().
+clock_skew() ->
+    application:get_env(erljwt, clock_skew, ?JWT_ALLOWED_CLOCK_SKEW).
 
 
 %% ========================================================================
@@ -172,7 +183,8 @@ already_valid(undefined) ->
     true;
 already_valid(NotBefore) when is_number(NotBefore) ->
     SecondsPassed = erljwt_util:epoch() - NotBefore,
-    SecondsPassed >= 0;
+    % security standards suggest to accept up to 5 minutes clock skew
+    SecondsPassed >= 0 - clock_skew();
 already_valid(_) ->
     false.
 
