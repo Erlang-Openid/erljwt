@@ -1,17 +1,9 @@
-{application, erljwt,
- [
-  {description, "A simple JWT decoding/encoding library"},
-  {vsn, "2.0.7"},
-  {registered, []},
-  {applications, [
-                  kernel,
-                  stdlib,
-                  crypto,
-                  jsone,
-                  base64url
-                 ]},
-  {modules, []},
-  {licenses, ["Apache 2.0"]},
-  {links, [{"GitHub","https://github.com/Erlang-Openid/erljwt"}]},
-  {env, []}
- ]}.
+{application,erljwt,
+             [{description,"A simple JWT decoding/encoding library"},
+              {vsn,"2.1.0"},
+              {registered,[]},
+              {applications,[kernel,stdlib,crypto,jsone,base64url]},
+              {modules,[]},
+              {licenses,["Apache 2.0"]},
+              {links,[{"GitHub","https://github.com/Erlang-Openid/erljwt"}]},
+              {env,[]}]}.
