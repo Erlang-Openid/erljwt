@@ -1,6 +1,10 @@
 Erlang JWT Library
 ==================
 
+:warning::warning: **This library is being deprecated. It will be maintained
+until most users migrated to `oidcc >= 3.0.0`. Afterwards it will be archived.
+Do NOT use this library for any new projects.** :warning::warning:
+
 erljwt is a easy to use json web token [JWT] parsing and minting library.
 JWT is a simple authorization token [RFC7519](https://www.rfc-editor.org/rfc/rfc7519.txt) based on JSON.
 
